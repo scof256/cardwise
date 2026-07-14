@@ -61,11 +61,6 @@ function Brand() {
   return <div className="brand"><span className="brand-mark"><i /><i /><i /></span><span>cardwise</span></div>;
 }
 
-function Confidence({ value }: { value: number }) {
-  const low = value < 85;
-  return <span className={`confidence ${low ? "low" : ""}`}><span />{value}% {low ? "review" : "confident"}</span>;
-}
-
 function CardArtwork({ company = companies[0], image, side = "front" }: { company?: Company; image?: string; side?: "front" | "back" }) {
   if (image) return <Image unoptimized width={640} height={360} className="uploaded-card-image" src={image} alt="Uploaded business card" />;
   if (side === "back") return <div className={`card-art card-art-back ${company.accent}`}><div className="card-art-company">{company.name}</div><p>{company.services.join(" · ")}</p><div className="card-art-details"><span>{company.site}</span><span>{company.location}</span></div><div className="card-art-bars"><i /><i /><i /></div></div>;
@@ -179,7 +174,7 @@ function FloatingAIComposer({ value, onChange, onSubmit, showSuggestions = false
   );
 }
 
-function Upload({ onReview, onCancel, workspaceSlug }: { onReview: (images: string[]) => void; onCancel: () => void; workspaceSlug?: string }) {
+function Upload({ clerkEnabled, onCancel, workspaceSlug }: { clerkEnabled: boolean; onCancel: () => void; workspaceSlug?: string }) {
   const input = useRef<HTMLInputElement>(null);
   const [images, setImages] = useState<string[]>([]);
   const [files, setFiles] = useState<File[]>([]);
@@ -202,7 +197,8 @@ function Upload({ onReview, onCancel, workspaceSlug }: { onReview: (images: stri
     setAnalyzing(true);
     setError("");
     if (!workspaceSlug) {
-      window.setTimeout(() => onReview(images), 1400);
+      setError("Sign in and open a workspace before uploading a card. Card details are extracted only inside your secure workspace.");
+      setAnalyzing(false);
       return;
     }
     try {
@@ -247,6 +243,9 @@ function Upload({ onReview, onCancel, workspaceSlug }: { onReview: (images: stri
       setAnalyzing(false);
     }
   };
+  if (!workspaceSlug) {
+    return <div className="auth-page"><section className="auth-setup"><span className="eyebrow">SECURE CARD EXTRACTION</span><h1>Sign in to upload a business card</h1><p>Card images and extracted details must belong to a real workspace. Sign in or create an account, then Cardwise will open your workspace before accepting the images.</p><AccountControls clerkEnabled={clerkEnabled} placement="topbar" /><button className="secondary" type="button" onClick={onCancel}>Return to preview</button></section></div>;
+  }
   return (
     <div className="narrow-page upload-page">
       <div className="stepper"><span className="active"><b>1</b>Upload</span><i /><span><b>2</b>AI analysis</span><i /><span><b>3</b>Review & save</span></div>
@@ -271,29 +270,6 @@ function Upload({ onReview, onCancel, workspaceSlug }: { onReview: (images: stri
       </div>
       {error && <div className="upload-error" role="alert">{error}</div>}
       <div className="upload-footer"><button className="secondary" onClick={() => { clearImages(); onCancel(); }}>Cancel</button><button className="primary" disabled={!files.length || analyzing} onClick={analyze}>{analyzing ? <><span className="spinner" /> Uploading & analyzing…</> : <>Analyze with AI <span>✦</span></>}</button></div>
-    </div>
-  );
-}
-
-function Field({ label, value, confidence, wide, area }: { label: string; value: string; confidence: number; wide?: boolean; area?: boolean }) {
-  const [content, setContent] = useState(value);
-  return <label className={`review-field ${wide ? "wide" : ""}`}><span className="field-label">{label}<Confidence value={confidence} /></span>{area ? <textarea value={content} onChange={(e) => setContent(e.target.value)} /> : <input value={content} onChange={(e) => setContent(e.target.value)} />}</label>;
-}
-
-function Review({ images, saved, onDraft, onReplace }: { images: string[]; saved: () => void; onDraft: () => void; onReplace: () => void }) {
-  const [side, setSide] = useState(0);
-  return (
-    <div className="review-page">
-      <div className="review-heading"><div><div className="eyebrow">AI ANALYSIS COMPLETE</div><h1>Review extracted information</h1><p>We found 16 fields. Three need a quick check before saving.</p></div><div className="overall-score"><span>Overall confidence</span><strong>91%</strong><i><b /></i></div></div>
-      <div className="review-layout">
-        <aside className="card-preview-panel"><div className="preview-head"><h2>Original card</h2><span>{images.length || 1} image{images.length === 1 ? "" : "s"}</span></div><div className="large-card-preview"><CardArtwork image={images[side]} /></div>{images.length > 1 && <div className="side-tabs">{images.map((_, i) => <button key={i} className={side === i ? "active" : ""} onClick={() => setSide(i)}>{i === 0 ? "Front" : i === 1 ? "Back" : `Image ${i + 1}`}</button>)}</div>}<div className="image-quality"><span>✓</span><div><strong>Image quality: Excellent</strong><p>Sharp, well-lit, all edges visible</p></div></div><button className="secondary full" onClick={onReplace}>Replace image</button></aside>
-        <main className="review-form">
-          <section className="review-section"><div className="review-section-title"><span className="section-number">01</span><div><h2>Company</h2><p>Business identity and details</p></div></div><div className="field-grid"><Field label="Company name" value="Kampala Print Studio" confidence={98} /><Field label="Industry / category" value="Printing & Design" confidence={91} /><Field label="Website" value="kampalaprint.ug" confidence={96} /><Field label="Tagline" value="Ideas made tangible" confidence={82} /><Field wide label="Products & services" value="Large format printing, brand identity, packaging, signage" confidence={88} area /></div></section>
-          <section className="review-section"><div className="review-section-title"><span className="section-number">02</span><div><h2>Contact person</h2><p>Individual details linked to this company</p></div></div><div className="field-grid"><Field label="Full name" value="Amina Nsubuga" confidence={97} /><Field label="Job title" value="Creative Director" confidence={94} /><Field label="Primary phone" value="+256 772 410 882" confidence={99} /><Field label="Primary email" value="amina@kampalaprint.ug" confidence={89} /></div></section>
-          <section className="review-section"><div className="review-section-title"><span className="section-number">03</span><div><h2>Location & other information</h2><p>Additional context preserved by the model</p></div></div><div className="field-grid"><Field wide label="Physical address" value="Plot 14, Kira Road, Kamwokya, Kampala, Uganda" confidence={79} /><Field wide label="Other information" value="Opening hours: Mon–Sat, 8:00–18:00\nInstagram: @kampalaprintstudio\nQR code: WhatsApp catalogue link" confidence={86} area /></div></section>
-        </main>
-      </div>
-      <div className="sticky-save"><div><span className="warning-dot">!</span><p><strong>3 fields need review</strong><br />Check highlighted confidence labels before saving.</p></div><div><button className="secondary" onClick={onDraft}>Save as draft</button><button className="primary" onClick={saved}>Save verified record <span>→</span></button></div></div>
     </div>
   );
 }
@@ -536,7 +512,7 @@ function HelpModal({ close }: { close: () => void }) { useEscape(close); return 
 
 type CardwiseAppProps = { workspaceSlug?: string; workspaceName?: string; initialCompanies?: Company[]; initialEvents?: EventSummary[]; clerkEnabled?: boolean; isSuperadmin?: boolean };
 export function CardwiseApp({ workspaceSlug, workspaceName = "Personal workspace", initialCompanies, initialEvents = [], clerkEnabled = false, isSuperadmin = false }: CardwiseAppProps = {}) {
-  const [active, setActive] = useState("overview"); const [images, setImages] = useState<string[]>([]); const [toast, setToast] = useState(""); const [mobileNav, setMobileNav] = useState(false); const [helpOpen, setHelpOpen] = useState(false); const [notificationsOpen, setNotificationsOpen] = useState(false); const [notificationItems, setNotificationItems] = useState<SidebarNotification[]>(sidebarNotifications); const [readNotificationIds, setReadNotificationIds] = useState<string[]>([]); const [chatPrompt, setChatPrompt] = useState(""); const [chatRequestId, setChatRequestId] = useState(0); const [directoryQuery, setDirectoryQuery] = useState(""); const [directoryCategory, setDirectoryCategory] = useState("All categories"); const [globalAiQuery, setGlobalAiQuery] = useState(""); const [workspaceCompanies, setWorkspaceCompanies] = useState(initialCompanies ?? companies);
+  const [active, setActive] = useState("overview"); const [toast, setToast] = useState(""); const [mobileNav, setMobileNav] = useState(false); const [helpOpen, setHelpOpen] = useState(false); const [notificationsOpen, setNotificationsOpen] = useState(false); const [notificationItems, setNotificationItems] = useState<SidebarNotification[]>(sidebarNotifications); const [readNotificationIds, setReadNotificationIds] = useState<string[]>([]); const [chatPrompt, setChatPrompt] = useState(""); const [chatRequestId, setChatRequestId] = useState(0); const [directoryQuery, setDirectoryQuery] = useState(""); const [directoryCategory, setDirectoryCategory] = useState("All categories"); const [globalAiQuery, setGlobalAiQuery] = useState(""); const [workspaceCompanies, setWorkspaceCompanies] = useState(initialCompanies ?? companies);
   useEffect(() => { if (!mobileNav) return; const previous = document.body.style.overflow; document.body.style.overflow = "hidden"; return () => { document.body.style.overflow = previous; }; }, [mobileNav]);
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -566,8 +542,7 @@ export function CardwiseApp({ workspaceSlug, workspaceName = "Personal workspace
   const ask = (query: string) => { setChatPrompt(query); setChatRequestId((value) => value + 1); setGlobalAiQuery(""); navigate("chat"); };
   let content: React.ReactNode;
   if (active === "overview") content = <Overview go={navigate} items={workspaceCompanies} events={initialEvents} />;
-  else if (active === "upload") content = <Upload workspaceSlug={workspaceSlug} onCancel={() => navigate("overview")} onReview={(uploadedImages) => { setImages(uploadedImages); navigate("review"); }} />;
-  else if (active === "review") content = <Review images={images} onReplace={() => navigate("upload")} onDraft={() => { notify("Draft saved for later review."); navigate("recent"); }} saved={() => { notify("Verified record saved and indexed."); navigate("companies"); }} />;
+  else if (active === "upload") content = <Upload clerkEnabled={clerkEnabled} workspaceSlug={workspaceSlug} onCancel={() => navigate("overview")} />;
   else if (active === "companies") content = <Directory key={`${directoryQuery}:${directoryCategory}`} items={workspaceCompanies} initialQuery={directoryQuery} initialCategory={directoryCategory} subtitle={`${workspaceCompanies.length} companies in this workspace`} onAdd={() => navigate("upload")} onUpdate={updateCompany} />;
   else if (active === "contacts") content = <Contacts items={workspaceCompanies} onUpdate={updateCompany} />;
   else if (active === "events") content = <div className="page-shell"><div className="page-title-row"><div><h1>Networking events</h1><p>Discover events and the verified cards people chose to share.</p></div><a className="primary admin-link" href={workspaceSlug ? `/app/${workspaceSlug}/events` : "/events"}>{workspaceSlug ? "Manage events" : "Browse all events"}</a></div><EventsHomeSection events={initialEvents} /></div>;

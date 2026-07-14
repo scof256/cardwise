@@ -39,13 +39,27 @@ test("private uploads use workspace-prefixed blob paths and signed callbacks", a
 test("multimodal extraction is durable and strictly schema-driven", async () => {
   const workflow = await read("workflows/extract-business-card.ts");
   const schema = await read("lib/ai/business-card-schema.ts");
+  const model = await read("lib/ai/extraction-model.ts");
   assert.match(workflow, /"use workflow"/);
   assert.match(workflow, /"use step"/);
   assert.match(workflow, /Output\.object\(\{ schema: businessCardExtractionSchema \}\)/);
+  assert.match(workflow, /model: getExtractionModel\(\)/);
+  assert.match(workflow, /type: "file", data: bytes, mediaType: image\.mimeType/);
   assert.match(workflow, /status: "awaiting_review"/);
+  assert.match(model, /provider\.chat\(modelId\)/);
+  assert.match(model, /process\.env\.OPENAI_BASE_URL/);
   assert.match(schema, /Never invent content/);
   assert.match(schema, /overallConfidence/);
   assert.match(schema, /otherInformation/);
+});
+
+test("card uploads never fall back to hard-coded extraction results", async () => {
+  const home = await read("app/page.tsx");
+  const client = await read("app/cardwise-app.tsx");
+  assert.match(home, /redirect\(workspace \? `\/app\/\$\{workspace\.slug\}` : "\/onboarding"\)/);
+  assert.match(client, /Sign in and open a workspace before uploading a card/);
+  assert.doesNotMatch(client, /value="Kampala Print Studio"/);
+  assert.doesNotMatch(client, /window\.setTimeout\(\(\) => onReview\(images\)/);
 });
 
 test("billing and identity webhooks verify signatures and are idempotent", async () => {

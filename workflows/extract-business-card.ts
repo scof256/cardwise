@@ -4,6 +4,7 @@ import { createId } from "@paralleldrive/cuid2";
 import { getDb } from "../db/index";
 import { aiGenerations, businessCardImages, businessCards, extractedFields, extractionRuns, fieldEvidence } from "../db/schema/index";
 import { businessCardExtractionInstructions, businessCardExtractionSchema, type BusinessCardExtraction } from "../lib/ai/business-card-schema";
+import { getExtractionModel } from "../lib/ai/extraction-model";
 import { getPrivateBlob } from "../lib/storage/blob";
 
 export type ExtractionWorkflowInput = { workspaceId: string; businessCardId: string; extractionRunId: string; generationId: string };
@@ -34,16 +35,16 @@ async function analyzeBusinessCard(input: ExtractionWorkflowInput): Promise<Busi
   const images = await getDb().select().from(businessCardImages).where(and(eq(businessCardImages.workspaceId, input.workspaceId), eq(businessCardImages.businessCardId, input.businessCardId))).orderBy(businessCardImages.sortOrder);
   if (!images.length) throw new Error("No uploaded images are available for extraction.");
 
-  const imageParts: Array<{ type: "image"; image: Uint8Array; mediaType: string }> = [];
+  const imageParts: Array<{ type: "file"; data: Uint8Array; mediaType: string }> = [];
   for (const image of images) {
     const blob = await getPrivateBlob(image.sanitizedBlobKey ?? image.blobKey);
     if (!blob || blob.statusCode === 304 || !blob.stream) throw new Error(`Card image ${image.id} is unavailable.`);
     const bytes = new Uint8Array(await new Response(blob.stream).arrayBuffer());
-    imageParts.push({ type: "image", image: bytes, mediaType: image.mimeType });
+    imageParts.push({ type: "file", data: bytes, mediaType: image.mimeType });
   }
 
   const result = await generateText({
-    model: process.env.AI_EXTRACTION_MODEL ?? "openai/gpt-5.2",
+    model: getExtractionModel(),
     output: Output.object({ schema: businessCardExtractionSchema }),
     system: businessCardExtractionInstructions,
     messages: [{ role: "user", content: [{ type: "text", text: `Analyze these ${images.length} image(s) together as one business card. Image order and side labels: ${images.map((image, index) => `${index}=${image.side}`).join(", ")}.` }, ...imageParts] }],
