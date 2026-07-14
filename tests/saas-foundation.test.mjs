@@ -1,0 +1,87 @@
+import assert from "node:assert/strict";
+import { readFile } from "node:fs/promises";
+import test from "node:test";
+
+const root = new URL("../", import.meta.url);
+const read = (path) => readFile(new URL(path, root), "utf8");
+
+test("uses the production Next.js stack with Supabase and no legacy vinext runtime", async () => {
+  const packageJson = JSON.parse(await read("package.json"));
+  assert.equal(packageJson.scripts.dev, "next dev");
+  assert.equal(packageJson.scripts.build, "next build");
+  assert.ok(packageJson.dependencies["@clerk/nextjs"]);
+  assert.ok(packageJson.dependencies.postgres, "postgres driver for Supabase");
+  assert.ok(packageJson.dependencies["drizzle-orm"], "drizzle-orm for Supabase");
+  assert.ok(packageJson.dependencies.workflow);
+  assert.equal(packageJson.dependencies.vinext, undefined);
+  assert.equal(packageJson.dependencies["@neondatabase/serverless"], undefined, "legacy Neon driver removed");
+  assert.equal(packageJson.devDependencies.wrangler, undefined);
+});
+
+test("tenant repositories bind reads and writes to workspace id", async () => {
+  const companies = await read("lib/repositories/companies.ts");
+  assert.match(companies, /getCompany\(workspaceId: string, id: string\)/);
+  assert.match(companies, /eq\(directoryCompanies\.workspaceId, workspaceId\)/);
+  assert.match(companies, /archiveCompany\(workspaceId: string, id: string\)/);
+  assert.doesNotMatch(companies, /getCompanyById\(id/);
+});
+
+test("private uploads use workspace-prefixed blob paths and signed callbacks", async () => {
+  const storage = await read("lib/storage/blob.ts");
+  const upload = await read("app/api/uploads/business-card/route.ts");
+  assert.match(storage, /workspaces\/\$\{workspaceId\}\/cards\/\$\{businessCardId\}/);
+  assert.match(storage, /access: "private"/);
+  assert.match(upload, /handleUpload/);
+  assert.match(upload, /requireWorkspacePermission/);
+  assert.match(upload, /checksumSha256/);
+});
+
+test("multimodal extraction is durable and strictly schema-driven", async () => {
+  const workflow = await read("workflows/extract-business-card.ts");
+  const schema = await read("lib/ai/business-card-schema.ts");
+  assert.match(workflow, /"use workflow"/);
+  assert.match(workflow, /"use step"/);
+  assert.match(workflow, /Output\.object\(\{ schema: businessCardExtractionSchema \}\)/);
+  assert.match(workflow, /status: "awaiting_review"/);
+  assert.match(schema, /Never invent content/);
+  assert.match(schema, /overallConfidence/);
+  assert.match(schema, /otherInformation/);
+});
+
+test("billing and identity webhooks verify signatures and are idempotent", async () => {
+  const clerk = await read("app/api/webhooks/clerk/route.ts");
+  const stripe = await read("app/api/webhooks/stripe/route.ts");
+  assert.match(clerk, /new Webhook/);
+  assert.match(clerk, /onConflictDoNothing/);
+  assert.match(stripe, /constructEvent/);
+  assert.match(stripe, /onConflictDoNothing/);
+  assert.match(stripe, /workspaceSubscriptions/);
+});
+
+test("public profile links store hashes rather than raw share tokens", async () => {
+  const profiles = await read("app/api/digital-profiles/route.ts");
+  const lookup = await read("lib/sharing/public-profile.ts");
+  assert.match(profiles, /createHash\("sha256"\)\.update\(token\)/);
+  assert.match(profiles, /tokenHash/);
+  assert.match(lookup, /eq\(shareLinks\.tokenHash, tokenHash\)/);
+});
+
+test("directory chat streams tenant-scoped hybrid retrieval as OpenUI before the LLM", async () => {
+  const route = await read("app/api/chat/route.ts");
+  const client = await read("app/cardwise-app.tsx");
+  const retrieval = await read("lib/search/hybrid-search.ts");
+  const migration = await read("supabase/migrations/20260713153401_hybrid_business_card_search.sql");
+  assert.match(route, /hybridSearchDocuments\(workspaceId, query/);
+  assert.match(route, /createUIMessageStreamResponse/);
+  assert.match(route, /type: "data-openui"/);
+  assert.match(route, /model: getChatModel\(\)/);
+  assert.match(client, /useChat<CardwiseUIMessage>/);
+  assert.match(client, /DefaultChatTransport/);
+  assert.match(client, /part\.type === "data-openui"/);
+  assert.match(retrieval, /input_type: inputType/);
+  assert.match(retrieval, /VOYAGE_RERANK_MODEL/);
+  assert.match(retrieval, /apikey: serviceRoleKey/);
+  assert.match(migration, /documents\.workspace_id = p_workspace_id/);
+  assert.match(migration, /full outer join semantic/);
+  assert.match(migration, /revoke all on function public\.hybrid_search_business_cards/);
+});

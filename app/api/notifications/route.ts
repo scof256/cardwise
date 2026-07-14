@@ -1,0 +1,9 @@
+import { and, desc, eq, isNull } from "drizzle-orm";
+import { NextResponse } from "next/server";
+import { z } from "zod";
+import { getDb } from "@/db";
+import { userNotifications } from "@/db/schema";
+import { requireWorkspaceContext } from "@/lib/auth/workspace-context";
+
+export async function GET(request: Request) { try { const workspaceSlug = new URL(request.url).searchParams.get("workspace"); if (!workspaceSlug) return NextResponse.json({ error: "Workspace is required." }, { status: 400 }); const context = await requireWorkspaceContext(workspaceSlug); const notifications = await getDb().select().from(userNotifications).where(and(eq(userNotifications.userId, context.userId), eq(userNotifications.workspaceId, context.workspaceId))).orderBy(desc(userNotifications.createdAt)).limit(30); return NextResponse.json({ notifications }); } catch (error) { return NextResponse.json({ error: error instanceof Error ? error.message : "Unable to load notifications." }, { status: 403 }); } }
+export async function PATCH(request: Request) { try { const input = z.object({ workspaceSlug: z.string().min(1), notificationId: z.string().optional(), all: z.boolean().optional() }).parse(await request.json()); const context = await requireWorkspaceContext(input.workspaceSlug); const filter = input.all ? and(eq(userNotifications.userId, context.userId), eq(userNotifications.workspaceId, context.workspaceId), isNull(userNotifications.readAt)) : and(eq(userNotifications.userId, context.userId), eq(userNotifications.workspaceId, context.workspaceId), eq(userNotifications.id, input.notificationId || "")); await getDb().update(userNotifications).set({ readAt: new Date() }).where(filter); return NextResponse.json({ updated: true }); } catch (error) { return NextResponse.json({ error: error instanceof Error ? error.message : "Unable to update notifications." }, { status: 400 }); } }
