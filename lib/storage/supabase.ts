@@ -56,6 +56,15 @@ export async function getPrivateObject(pathname: string) {
   return { statusCode: 200, stream: data.stream() };
 }
 
+export async function removePrivateObjects(pathnames: string[]) {
+  const uniquePathnames = [...new Set(pathnames.map((pathname) => pathname.trim()).filter(Boolean))];
+
+  if (uniquePathnames.length === 0) return;
+
+  const { error } = await getStorageAdmin().storage.from(getStorageBucket()).remove(uniquePathnames);
+  if (error) throw new Error(`Supabase Storage could not delete the card images: ${error.message}`);
+}
+
 export function businessCardObjectPath(workspaceId: string, businessCardId: string, imageId: string, filename: string) {
   const extension = filename.split(".").pop()?.toLowerCase().replace(/[^a-z0-9]/g, "") || "jpg";
   return `workspaces/${workspaceId}/cards/${businessCardId}/${imageId}.${extension}`;

@@ -80,6 +80,25 @@ test("directory records render their authenticated original card images", async 
   assert.match(client, /src=\{storedImage\}/);
 });
 
+test("directory cards support tenant-scoped persistent editing and privacy-safe deletion", async () => {
+  const route = await read("app/api/directory-companies/[companyId]/route.ts");
+  const client = await read("app/cardwise-app.tsx");
+  const storage = await read("lib/storage/supabase.ts");
+  assert.match(route, /requireWritableCompany/);
+  assert.match(route, /directory:write:any/);
+  assert.match(route, /directory:write:own/);
+  assert.match(route, /export async function PATCH/);
+  assert.match(route, /export async function DELETE/);
+  assert.match(route, /directory_company\.updated/);
+  assert.match(route, /directory_company\.deleted/);
+  assert.match(route, /delete\(searchDocuments\)/);
+  assert.match(route, /removePrivateObjects/);
+  assert.match(storage, /\.remove\(uniquePathnames\)/);
+  assert.match(client, /method: "PATCH"/);
+  assert.match(client, /method: "DELETE"/);
+  assert.match(client, /Delete permanently/);
+});
+
 test("billing and identity webhooks verify signatures and are idempotent", async () => {
   const clerk = await read("app/api/webhooks/clerk/route.ts");
   const stripe = await read("app/api/webhooks/stripe/route.ts");

@@ -126,7 +126,7 @@ function CompanyCard({ company, onOpen, onCard }: { company: Company; onOpen: ()
   );
 }
 
-function Overview({ go, items = companies, events }: { go: (value: string) => void; items?: Company[]; events: EventSummary[] }) {
+function Overview({ go, items = companies, events, workspaceSlug }: { go: (value: string) => void; items?: Company[]; events: EventSummary[]; workspaceSlug?: string }) {
   const [selected, setSelected] = useState<Company | null>(null);
   const [card, setCard] = useState<Company | null>(null);
   return (
@@ -144,7 +144,7 @@ function Overview({ go, items = companies, events }: { go: (value: string) => vo
       <EventsHomeSection events={events} />
       <section className="section-head"><div><span className="eyebrow">YOUR DIRECTORY</span><h2>Recently added</h2></div><button className="text-button" onClick={() => go("companies")}>View all companies →</button></section>
       <div className="company-grid">{items.slice(0, 3).map((c) => <CompanyCard key={c.id} company={c} onOpen={() => setSelected(c)} onCard={() => setCard(c)} />)}</div>
-      {selected && <RecordModal company={selected} close={() => setSelected(null)} onViewCard={() => { setCard(selected); setSelected(null); }} />}
+      {selected && <RecordModal company={selected} workspaceSlug={workspaceSlug} close={() => setSelected(null)} onViewCard={() => { setCard(selected); setSelected(null); }} />}
       {card && <CardModal company={card} close={() => setCard(null)} />}
     </div>
   );
@@ -261,17 +261,17 @@ function Upload({ clerkEnabled, onCancel, workspaceSlug }: { clerkEnabled: boole
   );
 }
 
-type DirectoryProps = { title?: string; subtitle?: string; items?: Company[]; initialQuery?: string; initialCategory?: string; onAdd: () => void; onUpdate: (company: Company) => void };
-function Directory({ title = "All companies", subtitle, items = companies, initialQuery = "", initialCategory = "All categories", onAdd, onUpdate }: DirectoryProps) {
+type DirectoryProps = { title?: string; subtitle?: string; items?: Company[]; initialQuery?: string; initialCategory?: string; workspaceSlug?: string; onAdd: () => void; onUpdate: (company: Company) => void; onDelete: (company: Company) => void };
+function Directory({ title = "All companies", subtitle, items = companies, initialQuery = "", initialCategory = "All categories", workspaceSlug, onAdd, onUpdate, onDelete }: DirectoryProps) {
   const [query, setQuery] = useState(initialQuery); const [selected, setSelected] = useState<Company | null>(null); const [card, setCard] = useState<Company | null>(null); const [filtersOpen, setFiltersOpen] = useState(false); const [category, setCategory] = useState(initialCategory); const [location, setLocation] = useState(""); const [sort, setSort] = useState<"recent" | "name">("recent"); const [view, setView] = useState<"grid" | "list">("grid");
   const filtered = useMemo(() => searchCompanies(items, query).filter((company) => category === "All categories" || company.category === category).filter((company) => !location.trim() || company.location.toLowerCase().includes(location.toLowerCase())).sort((a, b) => sort === "name" ? a.name.localeCompare(b.name) : 0), [category, items, location, query, sort]);
   const categories = [...new Set(items.map((item) => item.category))]; const filterCount = Number(category !== "All categories") + Number(Boolean(location));
-  return <div className="page-shell directory-page"><div className="page-title-row"><div><h1>{title}</h1><p>{subtitle ?? `${items.length} companies across ${categories.length} categories`}</p></div><button className="primary" onClick={onAdd}>＋ Add business card</button></div><div className="directory-tools"><div className="searchbox"><span>⌕</span><input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search companies, contacts or services" /></div><button className={`filter-button ${filtersOpen ? "active" : ""}`} onClick={() => setFiltersOpen((value) => !value)}>⊟ Filters {filterCount > 0 && <b>{filterCount}</b>}</button><button className={`view-toggle ${view === "grid" ? "active" : ""}`} onClick={() => setView("grid")} aria-label="Grid view">▦</button><button className={`view-toggle ${view === "list" ? "active" : ""}`} onClick={() => setView("list")} aria-label="List view">☷</button></div>{filtersOpen && <div className="directory-filter-panel"><label>Category<select value={category} onChange={(event) => setCategory(event.target.value)}><option>All categories</option>{categories.map((value) => <option key={value}>{value}</option>)}</select></label><label>Location<input value={location} onChange={(event) => setLocation(event.target.value)} placeholder="City or district" /></label><button className="secondary" onClick={() => { setCategory("All categories"); setLocation(""); }}>Reset filters</button></div>} {(category !== "All categories" || location) && <div className="active-filters">{category !== "All categories" && <span>{category} <button aria-label="Remove category filter" onClick={() => setCategory("All categories")}>×</button></span>}{location && <span>Location: {location} <button aria-label="Remove location filter" onClick={() => setLocation("")}>×</button></span>}<button onClick={() => { setCategory("All categories"); setLocation(""); }}>Clear all</button></div>}<div className="results-line"><span>Showing {filtered.length} of {items.length} companies</span><button onClick={() => setSort((value) => value === "recent" ? "name" : "recent")}>Sort: {sort === "recent" ? "Recently added" : "Company name"}⌄</button></div>{filtered.length ? <div className={`company-grid directory-grid ${view === "list" ? "list-view" : ""}`}>{filtered.map((company) => <CompanyCard key={company.id} company={company} onOpen={() => setSelected(company)} onCard={() => setCard(company)} />)}</div> : <EmptyState title="No companies found" copy="Try a broader keyword or clear a filter." action="Clear search" onAction={() => { setQuery(""); setCategory("All categories"); setLocation(""); }} />}{selected && <RecordModal company={selected} close={() => setSelected(null)} onUpdate={(updated) => { onUpdate(updated); setSelected(updated); }} onViewCard={() => { setCard(selected); setSelected(null); }} />}{card && <CardModal company={card} close={() => setCard(null)} />}</div>;
+  return <div className="page-shell directory-page"><div className="page-title-row"><div><h1>{title}</h1><p>{subtitle ?? `${items.length} companies across ${categories.length} categories`}</p></div><button className="primary" onClick={onAdd}>＋ Add business card</button></div><div className="directory-tools"><div className="searchbox"><span>⌕</span><input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search companies, contacts or services" /></div><button className={`filter-button ${filtersOpen ? "active" : ""}`} onClick={() => setFiltersOpen((value) => !value)}>⊟ Filters {filterCount > 0 && <b>{filterCount}</b>}</button><button className={`view-toggle ${view === "grid" ? "active" : ""}`} onClick={() => setView("grid")} aria-label="Grid view">▦</button><button className={`view-toggle ${view === "list" ? "active" : ""}`} onClick={() => setView("list")} aria-label="List view">☷</button></div>{filtersOpen && <div className="directory-filter-panel"><label>Category<select value={category} onChange={(event) => setCategory(event.target.value)}><option>All categories</option>{categories.map((value) => <option key={value}>{value}</option>)}</select></label><label>Location<input value={location} onChange={(event) => setLocation(event.target.value)} placeholder="City or district" /></label><button className="secondary" onClick={() => { setCategory("All categories"); setLocation(""); }}>Reset filters</button></div>} {(category !== "All categories" || location) && <div className="active-filters">{category !== "All categories" && <span>{category} <button aria-label="Remove category filter" onClick={() => setCategory("All categories")}>×</button></span>}{location && <span>Location: {location} <button aria-label="Remove location filter" onClick={() => setLocation("")}>×</button></span>}<button onClick={() => { setCategory("All categories"); setLocation(""); }}>Clear all</button></div>}<div className="results-line"><span>Showing {filtered.length} of {items.length} companies</span><button onClick={() => setSort((value) => value === "recent" ? "name" : "recent")}>Sort: {sort === "recent" ? "Recently added" : "Company name"}⌄</button></div>{filtered.length ? <div className={`company-grid directory-grid ${view === "list" ? "list-view" : ""}`}>{filtered.map((company) => <CompanyCard key={company.id} company={company} onOpen={() => setSelected(company)} onCard={() => setCard(company)} />)}</div> : <EmptyState title="No companies found" copy="Try a broader keyword or clear a filter." action="Clear search" onAction={() => { setQuery(""); setCategory("All categories"); setLocation(""); }} />}{selected && <RecordModal company={selected} workspaceSlug={workspaceSlug} close={() => setSelected(null)} onUpdate={(updated) => { onUpdate(updated); setSelected(updated); }} onDelete={(deleted) => { onDelete(deleted); setSelected(null); }} onViewCard={() => { setCard(selected); setSelected(null); }} />}{card && <CardModal company={card} close={() => setCard(null)} />}</div>;
 }
 
-function Contacts({ items = companies, onUpdate }: { items?: Company[]; onUpdate: (company: Company) => void }) {
+function Contacts({ items = companies, workspaceSlug, onUpdate, onDelete }: { items?: Company[]; workspaceSlug?: string; onUpdate: (company: Company) => void; onDelete: (company: Company) => void }) {
   const [query, setQuery] = useState(""); const [selected, setSelected] = useState<Company | null>(null); const [card, setCard] = useState<Company | null>(null); const [editing, setEditing] = useState(false); const filtered = searchCompanies(items.filter((item) => item.contact), query);
-  return <div className="page-shell"><div className="page-title-row"><div><h1>All contacts</h1><p>{items.filter((item) => item.contact).length} people connected to your company directory</p></div><button className="primary" onClick={() => setEditing(true)}>＋ Add contact</button></div><div className="searchbox contact-search"><span>⌕</span><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search contacts, companies, phone or email" /></div><div className="contact-list"><div className="contact-list-head"><span>Contact</span><span>Company</span><span>Phone</span><span>Added</span><span /></div>{filtered.map((company) => <button className="contact-row" key={company.id} onClick={() => setSelected(company)}><div><span className={`avatar ${company.accent}`}>{company.contact.split(" ").map((part) => part[0]).join("")}</span><p><strong>{company.contact}</strong><small>{company.email}</small></p></div><div><strong>{company.name}</strong><small>{company.role}</small></div><span>{company.phone}</span><span>{company.added}</span><span>→</span></button>)}</div>{!filtered.length && <EmptyState title="No contacts found" copy="Try another name, company, email, or phone number." action="Clear search" onAction={() => setQuery("")} />}{selected && <RecordModal company={selected} close={() => setSelected(null)} onUpdate={(updated) => { onUpdate(updated); setSelected(updated); }} onViewCard={() => { setCard(selected); setSelected(null); }} />}{card && <CardModal company={card} close={() => setCard(null)} />}{editing && <ContactEditor items={items} close={() => setEditing(false)} onSave={(updated) => { onUpdate(updated); setEditing(false); }} />}</div>;
+  return <div className="page-shell"><div className="page-title-row"><div><h1>All contacts</h1><p>{items.filter((item) => item.contact).length} people connected to your company directory</p></div><button className="primary" onClick={() => setEditing(true)}>＋ Add contact</button></div><div className="searchbox contact-search"><span>⌕</span><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search contacts, companies, phone or email" /></div><div className="contact-list"><div className="contact-list-head"><span>Contact</span><span>Company</span><span>Phone</span><span>Added</span><span /></div>{filtered.map((company) => <button className="contact-row" key={company.id} onClick={() => setSelected(company)}><div><span className={`avatar ${company.accent}`}>{company.contact.split(" ").map((part) => part[0]).join("")}</span><p><strong>{company.contact}</strong><small>{company.email}</small></p></div><div><strong>{company.name}</strong><small>{company.role}</small></div><span>{company.phone}</span><span>{company.added}</span><span>→</span></button>)}</div>{!filtered.length && <EmptyState title="No contacts found" copy="Try another name, company, email, or phone number." action="Clear search" onAction={() => setQuery("")} />}{selected && <RecordModal company={selected} workspaceSlug={workspaceSlug} close={() => setSelected(null)} onUpdate={(updated) => { onUpdate(updated); setSelected(updated); }} onDelete={(deleted) => { onDelete(deleted); setSelected(null); }} onViewCard={() => { setCard(selected); setSelected(null); }} />}{card && <CardModal company={card} close={() => setCard(null)} />}{editing && <ContactEditor items={items} close={() => setEditing(false)} onSave={(updated) => { onUpdate(updated); setEditing(false); }} />}</div>;
 }
 
 type ChatSession = {
@@ -410,7 +410,7 @@ function AIChat({ workspaceSlug, items = companies, initialQuery = "", launchId 
           {!hydrated || !activeSession ? <div className="chat-loading"><span className="spinner" /> Loading conversation…</div> : <ChatConversation key={activeSession.id} session={activeSession} workspaceSlug={workspaceSlug} items={items} initialPrompt={launchPrompt} onInitialPromptSent={() => setLaunchPrompt("")} onMessagesChange={updateMessages} onSelect={setSelected} onCard={setCard} />}
         </section>
       </div>
-      {selected && <RecordModal company={selected} close={() => setSelected(null)} onViewCard={() => { setCard(selected); setSelected(null); }} />}
+      {selected && <RecordModal company={selected} workspaceSlug={workspaceSlug} close={() => setSelected(null)} onViewCard={() => { setCard(selected); setSelected(null); }} />}
       {card && <CardModal company={card} close={() => setCard(null)} />}
     </div>
   );
@@ -474,11 +474,11 @@ function ChatConversation({ session, workspaceSlug, items, initialPrompt, onInit
   </>;
 }
 
-function SearchFilters({ items = companies }: { items?: Company[] }) {
+function SearchFilters({ items = companies, workspaceSlug }: { items?: Company[]; workspaceSlug?: string }) {
   const [keyword, setKeyword] = useState(""); const [category, setCategory] = useState("All categories"); const [location, setLocation] = useState(""); const [semantic, setSemantic] = useState(""); const [results, setResults] = useState(items); const [selected, setSelected] = useState<Company | null>(null); const [card, setCard] = useState<Company | null>(null); const categories = [...new Set(items.map((item) => item.category))];
   const apply = (semanticQuery = "") => { const searched = searchCompanies(items, semanticQuery || keyword); setResults(searched.filter((item) => category === "All categories" || item.category === category).filter((item) => !location.trim() || item.location.toLowerCase().includes(location.toLowerCase()))); };
   const reset = () => { setKeyword(""); setCategory("All categories"); setLocation(""); setSemantic(""); setResults(items); };
-  return <div className="page-shell"><div className="page-title-row"><div><h1>Search & filters</h1><p>Find the right company or person with precise criteria</p></div></div><div className="advanced-search"><aside><div className="filter-section"><label>Keyword search</label><input value={keyword} onChange={(event) => setKeyword(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter") apply(); }} placeholder="Name, service, phone…" /></div><div className="filter-section"><label>Category</label><select value={category} onChange={(event) => setCategory(event.target.value)}><option>All categories</option>{categories.map((value) => <option key={value}>{value}</option>)}</select></div><div className="filter-section"><label>Location</label><input value={location} onChange={(event) => setLocation(event.target.value)} placeholder="City or district" /></div><div className="filter-section"><label>Date added</label><div className="date-pair"><input type="date" /><input type="date" /></div></div><label className="check"><input type="checkbox" defaultChecked /> Verified records only</label><button className="primary full" onClick={() => apply()}>Apply filters</button><button className="secondary full" onClick={reset}>Reset all</button></aside><main><div className="semantic-box"><span>✦</span><div><h2>Try a semantic search</h2><p>Describe what the business does, even if those exact words aren’t on the card.</p><div><input value={semantic} onChange={(event) => setSemantic(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter") apply(semantic); }} placeholder="e.g. companies that can design and print product packaging" /><button onClick={() => apply(semantic)} disabled={!semantic.trim()}>Search meaning →</button></div></div></div><div className="section-head compact"><div><span className="eyebrow">MATCHES</span><h2>{results.length ? "Matching companies" : "No matches yet"}</h2></div><span>{results.length} results</span></div>{results.length ? <div className="company-grid search-results">{results.map((company) => <CompanyCard key={company.id} company={company} onOpen={() => setSelected(company)} onCard={() => setCard(company)} />)}</div> : <EmptyState title="No companies match those filters" copy="Reset the filters or try a broader description." action="Reset filters" onAction={reset} />}</main></div>{selected && <RecordModal company={selected} close={() => setSelected(null)} onViewCard={() => { setCard(selected); setSelected(null); }} />}{card && <CardModal company={card} close={() => setCard(null)} />}</div>;
+  return <div className="page-shell"><div className="page-title-row"><div><h1>Search & filters</h1><p>Find the right company or person with precise criteria</p></div></div><div className="advanced-search"><aside><div className="filter-section"><label>Keyword search</label><input value={keyword} onChange={(event) => setKeyword(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter") apply(); }} placeholder="Name, service, phone…" /></div><div className="filter-section"><label>Category</label><select value={category} onChange={(event) => setCategory(event.target.value)}><option>All categories</option>{categories.map((value) => <option key={value}>{value}</option>)}</select></div><div className="filter-section"><label>Location</label><input value={location} onChange={(event) => setLocation(event.target.value)} placeholder="City or district" /></div><div className="filter-section"><label>Date added</label><div className="date-pair"><input type="date" /><input type="date" /></div></div><label className="check"><input type="checkbox" defaultChecked /> Verified records only</label><button className="primary full" onClick={() => apply()}>Apply filters</button><button className="secondary full" onClick={reset}>Reset all</button></aside><main><div className="semantic-box"><span>✦</span><div><h2>Try a semantic search</h2><p>Describe what the business does, even if those exact words aren’t on the card.</p><div><input value={semantic} onChange={(event) => setSemantic(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter") apply(semantic); }} placeholder="e.g. companies that can design and print product packaging" /><button onClick={() => apply(semantic)} disabled={!semantic.trim()}>Search meaning →</button></div></div></div><div className="section-head compact"><div><span className="eyebrow">MATCHES</span><h2>{results.length ? "Matching companies" : "No matches yet"}</h2></div><span>{results.length} results</span></div>{results.length ? <div className="company-grid search-results">{results.map((company) => <CompanyCard key={company.id} company={company} onOpen={() => setSelected(company)} onCard={() => setCard(company)} />)}</div> : <EmptyState title="No companies match those filters" copy="Reset the filters or try a broader description." action="Reset filters" onAction={reset} />}</main></div>{selected && <RecordModal company={selected} workspaceSlug={workspaceSlug} close={() => setSelected(null)} onViewCard={() => { setCard(selected); setSelected(null); }} />}{card && <CardModal company={card} close={() => setCard(null)} />}</div>;
 }
 
 function Duplicates({ onDone }: { onDone: (message: string) => void }) { const [status, setStatus] = useState<"review" | "separate" | "merged">("review"); if (status !== "review") return <div className="page-shell"><EmptyState title={status === "merged" ? "Records merged" : "Records kept separate"} copy="This duplicate suggestion has been resolved and removed from the review queue." action="Review another match" onAction={() => setStatus("review")} /></div>; return <div className="page-shell"><div className="page-title-row"><div><h1>Duplicate review</h1><p>6 possible matches found across your directory</p></div></div><div className="duplicate-card"><div className="duplicate-head"><div><span className="match-score">94% match</span><h2>Possible duplicate company</h2><p>Phone number and website match across both records.</p></div><span className="status-review">Needs review</span></div><div className="compare-grid"><div><small>EXISTING RECORD</small><div className="compare-company"><span className="company-logo coral">KP</span><div><h3>Kampala Print Studio Ltd</h3><p>Amina Nsubuga · Creative Director</p></div></div><ul><li><span>Phone</span>+256 772 410 882</li><li><span>Website</span>kampalaprint.ug</li><li><span>Location</span>Kamwokya, Kampala</li></ul></div><div className="match-divider"><span>=</span></div><div><small>NEWLY ADDED</small><div className="compare-company"><span className="company-logo coral">KP</span><div><h3>Kampala Print Studio</h3><p>Amina Nsubuga · Creative Director</p></div></div><ul><li><span>Phone</span>+256 772 410 882</li><li><span>Website</span>kampalaprint.ug</li><li><span>Location</span>Kira Rd, Kamwokya</li></ul></div></div><div className="duplicate-actions"><button className="secondary" onClick={() => { setStatus("separate"); onDone("Records kept as separate companies."); }}>Keep as separate</button><button className="primary" onClick={() => { setStatus("merged"); onDone("Duplicate records merged successfully."); }}>Review & merge →</button></div></div></div>; }
@@ -491,7 +491,149 @@ function EmptyState({ title, copy, action, onAction }: { title: string; copy: st
 
 function ContactEditor({ items, close, onSave }: { items: Company[]; close: () => void; onSave: (company: Company) => void }) { const [companyId, setCompanyId] = useState(String(items[0]?.id ?? "")); const selected = items.find((item) => String(item.id) === companyId); const [name, setName] = useState(""); const [role, setRole] = useState(""); const [phone, setPhone] = useState(""); const [email, setEmail] = useState(""); useEscape(close); const submit = (event: React.FormEvent) => { event.preventDefault(); if (!selected || !name.trim()) return; onSave({ ...selected, contact: name.trim(), role: role.trim(), phone: phone.trim(), email: email.trim() }); }; return <div className="modal-layer" onMouseDown={close}><form className="form-modal" role="dialog" aria-modal="true" aria-labelledby="contact-editor-title" onMouseDown={(event) => event.stopPropagation()} onSubmit={submit}><button className="modal-close" type="button" aria-label="Close contact editor" onClick={close}>×</button><span className="eyebrow">CONTACT</span><h2 id="contact-editor-title">Add a company contact</h2><label>Company<select value={companyId} onChange={(event) => setCompanyId(event.target.value)}>{items.map((item) => <option key={item.id} value={String(item.id)}>{item.name}</option>)}</select></label><label>Full name<input required value={name} onChange={(event) => setName(event.target.value)} /></label><label>Job title<input value={role} onChange={(event) => setRole(event.target.value)} /></label><label>Phone<input value={phone} onChange={(event) => setPhone(event.target.value)} /></label><label>Email<input type="email" value={email} onChange={(event) => setEmail(event.target.value)} /></label><button className="primary full" type="submit" disabled={!selected || !name.trim()}>Save contact</button></form></div>; }
 
-function RecordModal({ company, close, onUpdate, onViewCard }: { company: Company; close: () => void; onUpdate?: (company: Company) => void; onViewCard?: () => void }) { const [editing, setEditing] = useState(false); const [draft, setDraft] = useState(company); useEscape(close); const save = (event: React.FormEvent) => { event.preventDefault(); onUpdate?.({ ...draft, initials: draft.name.split(" ").slice(0, 2).map((part) => part[0]).join("").toUpperCase() }); setEditing(false); }; return <div className="modal-layer" onMouseDown={close}><div className="record-modal" role="dialog" aria-modal="true" aria-labelledby="record-title" onMouseDown={(event) => event.stopPropagation()}><button className="modal-close" aria-label="Close record" onClick={close}>×</button><div className="record-hero"><span className={`company-logo large ${company.accent}`}>{company.initials}</span><div><span className="category-pill">{company.category}</span><h2 id="record-title">{company.name}</h2><p>{company.services.join(" · ")}</p></div></div>{editing ? <form className="record-edit-form" onSubmit={save}><label>Company name<input value={draft.name} onChange={(event) => setDraft({ ...draft, name: event.target.value })} /></label><label>Category<input value={draft.category} onChange={(event) => setDraft({ ...draft, category: event.target.value })} /></label><label>Contact person<input value={draft.contact} onChange={(event) => setDraft({ ...draft, contact: event.target.value })} /></label><label>Job title<input value={draft.role} onChange={(event) => setDraft({ ...draft, role: event.target.value })} /></label><label>Phone<input value={draft.phone} onChange={(event) => setDraft({ ...draft, phone: event.target.value })} /></label><label>Email<input type="email" value={draft.email} onChange={(event) => setDraft({ ...draft, email: event.target.value })} /></label><label>Website<input value={draft.site} onChange={(event) => setDraft({ ...draft, site: event.target.value })} /></label><label>Location<input value={draft.location} onChange={(event) => setDraft({ ...draft, location: event.target.value })} /></label><div><button className="secondary" type="button" onClick={() => { setDraft(company); setEditing(false); }}>Cancel</button><button className="primary" type="submit">Save record</button></div></form> : <div className="record-body"><section><h3>Primary contact</h3><div className="person-card"><span className={`avatar ${company.accent}`}>{company.contact.split(" ").map((part) => part[0]).join("")}</span><div><strong>{company.contact || "No contact listed"}</strong><p>{company.role}</p></div></div><dl><dt>Phone</dt><dd>{company.phone || "—"}</dd><dt>Email</dt><dd>{company.email || "—"}</dd><dt>Website</dt><dd>{company.site || "—"}</dd><dt>Location</dt><dd>{company.location || "—"}</dd></dl></section><section><h3>Original business card</h3><CardArtwork company={company} /><button className="secondary full" onClick={onViewCard}>View original images</button></section></div>}<div className="record-footer"><small>Verified record · Added {company.added}</small>{!editing && <button className="primary" onClick={() => setEditing(true)}>Edit record</button>}</div></div></div>; }
+type RecordModalProps = {
+  company: Company;
+  workspaceSlug?: string;
+  close: () => void;
+  onUpdate?: (company: Company) => void;
+  onDelete?: (company: Company) => void;
+  onViewCard?: () => void;
+};
+
+function RecordModal({ company, workspaceSlug, close, onUpdate, onDelete, onViewCard }: RecordModalProps) {
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState(company);
+  const [saving, setSaving] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const [confirmingDelete, setConfirmingDelete] = useState(false);
+  const [error, setError] = useState("");
+  const handleEscape = useCallback(() => {
+    if (confirmingDelete && !deleting) setConfirmingDelete(false);
+    else if (!saving && !deleting) close();
+  }, [close, confirmingDelete, deleting, saving]);
+  useEscape(handleEscape);
+
+  const save = async (event: React.FormEvent) => {
+    event.preventDefault();
+    setError("");
+
+    if (!workspaceSlug) {
+      const updated = {
+        ...draft,
+        initials: draft.name.split(/\s+/).slice(0, 2).map((part) => part[0]).join("").toUpperCase(),
+      };
+      onUpdate?.(updated);
+      setEditing(false);
+      return;
+    }
+
+    setSaving(true);
+    try {
+      const response = await fetch(`/api/directory-companies/${encodeURIComponent(company.id)}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          workspaceSlug,
+          name: draft.name,
+          category: draft.category,
+          contact: draft.contact,
+          role: draft.role,
+          phone: draft.phone,
+          email: draft.email,
+          site: draft.site,
+          location: draft.location,
+        }),
+      });
+      const result = await response.json() as { company?: Partial<Company>; error?: string };
+      if (!response.ok || !result.company) throw new Error(result.error || "The card could not be saved.");
+
+      const updated = { ...company, ...draft, ...result.company };
+      setDraft(updated);
+      setEditing(false);
+      if (onUpdate) onUpdate(updated);
+      else window.location.reload();
+    } catch (saveError) {
+      setError(saveError instanceof Error ? saveError.message : "The card could not be saved.");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const deleteRecord = async () => {
+    if (!workspaceSlug) return;
+    setDeleting(true);
+    setError("");
+    try {
+      const response = await fetch(`/api/directory-companies/${encodeURIComponent(company.id)}`, {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ workspaceSlug }),
+      });
+      const result = await response.json() as { deleted?: boolean; error?: string };
+      if (!response.ok || !result.deleted) throw new Error(result.error || "The card could not be deleted.");
+
+      if (onDelete) onDelete(company);
+      else window.location.reload();
+    } catch (deleteError) {
+      setConfirmingDelete(false);
+      setError(deleteError instanceof Error ? deleteError.message : "The card could not be deleted.");
+    } finally {
+      setDeleting(false);
+    }
+  };
+
+  return (
+    <div className="modal-layer" onMouseDown={close}>
+      <div className="record-modal" role="dialog" aria-modal="true" aria-labelledby="record-title" onMouseDown={(event) => event.stopPropagation()}>
+        <button className="modal-close" aria-label="Close record" onClick={close}>×</button>
+        <div className="record-hero">
+          <span className={`company-logo large ${company.accent}`}>{company.initials}</span>
+          <div><span className="category-pill">{company.category}</span><h2 id="record-title">{company.name}</h2><p>{company.services.join(" · ")}</p></div>
+        </div>
+        {error && <div className="record-action-error" role="alert">{error}</div>}
+        {editing ? (
+          <form className="record-edit-form" onSubmit={save}>
+            <label>Company name<input required autoFocus value={draft.name} onChange={(event) => setDraft({ ...draft, name: event.target.value })} /></label>
+            <label>Category<input value={draft.category} onChange={(event) => setDraft({ ...draft, category: event.target.value })} /></label>
+            <label>Contact person<input value={draft.contact} onChange={(event) => setDraft({ ...draft, contact: event.target.value })} /></label>
+            <label>Job title<input value={draft.role} onChange={(event) => setDraft({ ...draft, role: event.target.value })} /></label>
+            <label>Phone<input type="tel" value={draft.phone} onChange={(event) => setDraft({ ...draft, phone: event.target.value })} /></label>
+            <label>Email<input type="email" value={draft.email} onChange={(event) => setDraft({ ...draft, email: event.target.value })} /></label>
+            <label>Website<input value={draft.site} onChange={(event) => setDraft({ ...draft, site: event.target.value })} /></label>
+            <label className="record-edit-wide">Location<input value={draft.location} onChange={(event) => setDraft({ ...draft, location: event.target.value })} /></label>
+            <div className="record-edit-actions">
+              <button className="secondary" type="button" disabled={saving} onClick={() => { setDraft(company); setEditing(false); setError(""); }}>Cancel</button>
+              <button className="primary" type="submit" disabled={saving}>{saving ? <><span className="spinner" /> Saving…</> : "Save changes"}</button>
+            </div>
+          </form>
+        ) : (
+          <div className="record-body">
+            <section>
+              <h3>Primary contact</h3>
+              <div className="person-card"><span className={`avatar ${company.accent}`}>{company.contact.split(" ").map((part) => part[0]).join("")}</span><div><strong>{company.contact || "No contact listed"}</strong><p>{company.role}</p></div></div>
+              <dl><dt>Phone</dt><dd>{company.phone || "—"}</dd><dt>Email</dt><dd>{company.email || "—"}</dd><dt>Website</dt><dd>{company.site || "—"}</dd><dt>Location</dt><dd>{company.location || "—"}</dd></dl>
+            </section>
+            <section><h3>Original business card</h3><CardArtwork company={company} /><button className="secondary full" onClick={onViewCard}>View original images</button></section>
+          </div>
+        )}
+        <div className="record-footer">
+          <small>Verified record · Added {company.added}</small>
+          {!editing && <div className="record-footer-actions">{workspaceSlug && <button className="danger-button" onClick={() => { setError(""); setConfirmingDelete(true); }}>Delete card</button>}<button className="primary" onClick={() => { setDraft(company); setError(""); setEditing(true); }}>Edit record</button></div>}
+        </div>
+        {confirmingDelete && (
+          <div className="delete-confirmation-backdrop" onMouseDown={() => !deleting && setConfirmingDelete(false)}>
+            <section className="delete-confirmation" role="alertdialog" aria-modal="true" aria-labelledby="delete-card-title" aria-describedby="delete-card-description" onMouseDown={(event) => event.stopPropagation()}>
+              <span className="delete-warning-icon" aria-hidden="true">!</span>
+              <h3 id="delete-card-title">Delete {company.name}?</h3>
+              <p id="delete-card-description">This removes the directory record, extracted card data, search entry, and original images from Supabase Storage. This cannot be undone.</p>
+              <div><button className="secondary" type="button" disabled={deleting} onClick={() => setConfirmingDelete(false)}>Keep card</button><button className="danger-button solid" type="button" disabled={deleting} onClick={deleteRecord}>{deleting ? <><span className="spinner" /> Deleting…</> : "Delete permanently"}</button></div>
+            </section>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
 
 function CardModal({ company, close }: { company: Company; close: () => void }) { const [side, setSide] = useState<"front" | "back">("front"); useEscape(close); return <div className="modal-layer" onMouseDown={close}><div className="card-modal" role="dialog" aria-modal="true" aria-labelledby="card-modal-title" onMouseDown={(event) => event.stopPropagation()}><div className="modal-title"><div><span className="eyebrow">ORIGINAL CARD</span><h2 id="card-modal-title">{company.name}</h2></div><button onClick={close} aria-label="Close original card">×</button></div><CardArtwork company={company} side={side} /><div className="side-tabs"><button className={side === "front" ? "active" : ""} onClick={() => setSide("front")}>Front</button><button className={side === "back" ? "active" : ""} onClick={() => setSide("back")}>Back</button></div><p>Stored securely · Original quality · Added {company.added}</p></div></div>; }
 
@@ -526,20 +668,21 @@ export function CardwiseApp({ workspaceSlug, workspaceName = "Personal workspace
     if (notification.target.startsWith("/")) window.location.assign(notification.target); else navigate(notification.target);
   };
   const updateCompany = (updated: Company) => { setWorkspaceCompanies((current) => current.map((company) => company.id === updated.id ? updated : company)); notify(`${updated.name} was updated.`); };
+  const deleteCompany = (deleted: Company) => { setWorkspaceCompanies((current) => current.filter((company) => company.id !== deleted.id)); notify(`${deleted.name} was deleted.`); };
   const ask = (query: string) => { setChatPrompt(query); setChatRequestId((value) => value + 1); setGlobalAiQuery(""); navigate("chat"); };
   let content: React.ReactNode;
-  if (active === "overview") content = <Overview go={navigate} items={workspaceCompanies} events={initialEvents} />;
+  if (active === "overview") content = <Overview go={navigate} items={workspaceCompanies} events={initialEvents} workspaceSlug={workspaceSlug} />;
   else if (active === "upload") content = <Upload clerkEnabled={clerkEnabled} workspaceSlug={workspaceSlug} onCancel={() => navigate("overview")} />;
-  else if (active === "companies") content = <Directory key={`${directoryQuery}:${directoryCategory}`} items={workspaceCompanies} initialQuery={directoryQuery} initialCategory={directoryCategory} subtitle={`${workspaceCompanies.length} companies in this workspace`} onAdd={() => navigate("upload")} onUpdate={updateCompany} />;
-  else if (active === "contacts") content = <Contacts items={workspaceCompanies} onUpdate={updateCompany} />;
+  else if (active === "companies") content = <Directory key={`${directoryQuery}:${directoryCategory}`} items={workspaceCompanies} initialQuery={directoryQuery} initialCategory={directoryCategory} workspaceSlug={workspaceSlug} subtitle={`${workspaceCompanies.length} companies in this workspace`} onAdd={() => navigate("upload")} onUpdate={updateCompany} onDelete={deleteCompany} />;
+  else if (active === "contacts") content = <Contacts items={workspaceCompanies} workspaceSlug={workspaceSlug} onUpdate={updateCompany} onDelete={deleteCompany} />;
   else if (active === "events") content = <div className="page-shell"><div className="page-title-row"><div><h1>Networking events</h1><p>Discover events and the verified cards people chose to share.</p></div><a className="primary admin-link" href={workspaceSlug ? `/app/${workspaceSlug}/events` : "/events"}>{workspaceSlug ? "Manage events" : "Browse all events"}</a></div><EventsHomeSection events={initialEvents} /></div>;
   else if (active === "chat") content = <AIChat key={`${chatRequestId}:${chatPrompt || "default-chat"}`} workspaceSlug={workspaceSlug} items={workspaceCompanies} initialQuery={chatPrompt} launchId={chatRequestId} />;
-  else if (active === "search") content = <SearchFilters items={workspaceCompanies} />;
-  else if (active === "recent") content = <Directory title="Recently added" subtitle={`${workspaceCompanies.length} saved companies`} items={workspaceCompanies} onAdd={() => navigate("upload")} onUpdate={updateCompany} />;
+  else if (active === "search") content = <SearchFilters items={workspaceCompanies} workspaceSlug={workspaceSlug} />;
+  else if (active === "recent") content = <Directory title="Recently added" subtitle={`${workspaceCompanies.length} saved companies`} items={workspaceCompanies} workspaceSlug={workspaceSlug} onAdd={() => navigate("upload")} onUpdate={updateCompany} onDelete={deleteCompany} />;
   else if (active === "categories") content = <Categories items={workspaceCompanies} onManage={() => navigate("settings")} onSelect={(category) => { setDirectoryCategory(category); setDirectoryQuery(""); navigate("companies"); }} />;
   else if (active === "duplicates") content = <Duplicates onDone={notify} />;
   else if (active === "settings") content = <Settings items={workspaceCompanies} onSaved={notify} />;
-  else content = <Overview go={navigate} items={workspaceCompanies} events={initialEvents} />;
+  else content = <Overview go={navigate} items={workspaceCompanies} events={initialEvents} workspaceSlug={workspaceSlug} />;
   return (
     <div className="app">
       {mobileNav && <button type="button" className="sidebar-scrim" aria-label="Close navigation" onClick={() => setMobileNav(false)} />}
