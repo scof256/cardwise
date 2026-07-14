@@ -5,7 +5,7 @@ import { getDb } from "../db/index";
 import { aiGenerations, businessCardImages, businessCards, extractedFields, extractionRuns, fieldEvidence } from "../db/schema/index";
 import { businessCardExtractionInstructions, businessCardExtractionSchema, type BusinessCardExtraction } from "../lib/ai/business-card-schema";
 import { getExtractionModel } from "../lib/ai/extraction-model";
-import { getPrivateBlob } from "../lib/storage/blob";
+import { getPrivateObject } from "../lib/storage/supabase";
 
 export type ExtractionWorkflowInput = { workspaceId: string; businessCardId: string; extractionRunId: string; generationId: string };
 
@@ -37,7 +37,7 @@ async function analyzeBusinessCard(input: ExtractionWorkflowInput): Promise<Busi
 
   const imageParts: Array<{ type: "file"; data: Uint8Array; mediaType: string }> = [];
   for (const image of images) {
-    const blob = await getPrivateBlob(image.sanitizedBlobKey ?? image.blobKey);
+    const blob = await getPrivateObject(image.sanitizedBlobKey ?? image.blobKey);
     if (!blob || blob.statusCode === 304 || !blob.stream) throw new Error(`Card image ${image.id} is unavailable.`);
     const bytes = new Uint8Array(await new Response(blob.stream).arrayBuffer());
     imageParts.push({ type: "file", data: bytes, mediaType: image.mimeType });

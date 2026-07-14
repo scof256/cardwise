@@ -8,7 +8,7 @@ AI-powered business-card wallet, contact manager, company directory, and team sa
 - Clerk authentication and Organizations
 - PostgreSQL with Drizzle ORM for application records
 - Supabase Postgres full-text search and pgvector for tenant-scoped hybrid retrieval
-- Private Vercel Blob storage
+- Private Supabase Storage for business-card images
 - Vercel Workflow for durable extraction
 - AI SDK structured multimodal extraction and directory-chat retrieval
 - Stripe subscriptions and customer portal
@@ -31,7 +31,7 @@ Without external credentials, the public product preview and auth setup guidance
 - Point `DATABASE_URL` at the PostgreSQL database containing the application schema.
 - Configure the Supabase URL and server-only service-role key, then apply `supabase/migrations`.
 - Configure Voyage embeddings and reranking. The checked-in hybrid-search migration uses 1,024-dimensional `voyage-4` vectors.
-- Create a private Vercel Blob store and set `BLOB_READ_WRITE_TOKEN`.
+- Create a private Supabase Storage bucket (the default name is `directory-media`) and set `NEXT_PUBLIC_SUPABASE_STORAGE_BUCKET`. Keep `SUPABASE_SERVICE_ROLE_KEY` server-only; the browser uploads with short-lived signed tokens.
 - Configure the OpenAI-compatible chat endpoint/model variables. Retrieved Supabase records are passed to this model as grounded context.
 - Create Stripe Pro and Business prices, then point a signing webhook at `/api/webhooks/stripe`.
 

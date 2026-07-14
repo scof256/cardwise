@@ -11,10 +11,12 @@ test("uses the production Next.js stack with Supabase and no legacy vinext runti
   assert.equal(packageJson.scripts.build, "next build");
   assert.ok(packageJson.dependencies["@clerk/nextjs"]);
   assert.ok(packageJson.dependencies.postgres, "postgres driver for Supabase");
+  assert.ok(packageJson.dependencies["@supabase/supabase-js"], "Supabase client for private image storage");
   assert.ok(packageJson.dependencies["drizzle-orm"], "drizzle-orm for Supabase");
   assert.ok(packageJson.dependencies.workflow);
   assert.equal(packageJson.dependencies.vinext, undefined);
   assert.equal(packageJson.dependencies["@neondatabase/serverless"], undefined, "legacy Neon driver removed");
+  assert.equal(packageJson.dependencies["@vercel/blob"], undefined, "card images stay in Supabase Storage");
   assert.equal(packageJson.devDependencies.wrangler, undefined);
 });
 
@@ -26,14 +28,20 @@ test("tenant repositories bind reads and writes to workspace id", async () => {
   assert.doesNotMatch(companies, /getCompanyById\(id/);
 });
 
-test("private uploads use workspace-prefixed blob paths and signed callbacks", async () => {
-  const storage = await read("lib/storage/blob.ts");
+test("private uploads use workspace-prefixed Supabase Storage paths and signed uploads", async () => {
+  const storage = await read("lib/storage/supabase.ts");
   const upload = await read("app/api/uploads/business-card/route.ts");
+  const migration = await read("supabase/migrations/20260714223442_configure_directory_media_bucket.sql");
   assert.match(storage, /workspaces\/\$\{workspaceId\}\/cards\/\$\{businessCardId\}/);
-  assert.match(storage, /access: "private"/);
-  assert.match(upload, /handleUpload/);
+  assert.match(storage, /createSignedUploadUrl/);
+  assert.match(storage, /SUPABASE_SERVICE_ROLE_KEY/);
+  assert.match(upload, /createPrivateUploadToken/);
+  assert.match(upload, /privateObjectExists/);
   assert.match(upload, /requireWorkspacePermission/);
   assert.match(upload, /checksumSha256/);
+  assert.match(migration, /'directory-media'/);
+  assert.match(migration, /file_size_limit/);
+  assert.match(migration, /allowed_mime_types/);
 });
 
 test("multimodal extraction is durable and strictly schema-driven", async () => {

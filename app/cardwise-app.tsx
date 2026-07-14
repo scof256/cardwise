@@ -2,7 +2,6 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Image from "next/image";
-import { upload } from "@vercel/blob/client";
 import { useChat } from "@ai-sdk/react";
 import { DefaultChatTransport } from "ai";
 import { AccountControls } from "@/components/account-controls";
@@ -11,6 +10,7 @@ import { EventsHomeSection } from "@/components/events/events-home-section";
 import { demoCompanies as companies, type Company } from "@/lib/demo-directory";
 import type { CardwiseUIMessage, OpenUIDirectoryPayload } from "@/lib/ai/openui";
 import type { EventSummary } from "@/lib/events/demo-events";
+import { uploadPrivateCardImage } from "@/lib/storage/supabase-browser";
 
 export type { Company } from "@/lib/demo-directory";
 
@@ -211,25 +211,11 @@ function Upload({ clerkEnabled, onCancel, workspaceSlug }: { clerkEnabled: boole
         const extension = file.name.split(".").pop()?.toLowerCase().replace(/[^a-z0-9]/g, "") || "jpg";
         const pathname = `workspaces/${created.workspaceId}/cards/${created.cardId}/${imageId}.${extension}`;
         const side = index === 0 ? "front" : index === 1 ? "back" : "additional";
-        await upload(pathname, file, { access: "private", handleUploadUrl: "/api/uploads/business-card", clientPayload: JSON.stringify({ workspaceSlug, workspaceId: created.workspaceId, cardId: created.cardId, imageId, side, sortOrder: index, originalFilename: file.name, mimeType: file.type || "image/jpeg", byteSize: file.size, checksumSha256: checksum }) });
+        await uploadPrivateCardImage(pathname, file, { workspaceSlug, workspaceId: created.workspaceId, cardId: created.cardId, imageId, side, sortOrder: index, originalFilename: file.name, mimeType: file.type || "image/jpeg", byteSize: file.size, checksumSha256: checksum });
       }));
-      let extractionStarted = false;
-      let extractionError = "AI analysis could not be started.";
-      for (let attempt = 0; attempt < 10; attempt += 1) {
-        const extractionResponse = await fetch(`/api/business-cards/${created.cardId}/extract`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ workspaceSlug }) });
-        const extraction = await extractionResponse.json() as { error?: string };
-        if (extractionResponse.ok) {
-          extractionStarted = true;
-          break;
-        }
-        extractionError = extraction.error || extractionError;
-        // Vercel Blob confirms the client upload before its completion callback
-        // is guaranteed to have persisted the image row. Give that callback a
-        // short window to finish instead of abandoning the newly created card.
-        if (extractionResponse.status !== 409) throw new Error(extractionError);
-        await new Promise((resolve) => window.setTimeout(resolve, 750));
-      }
-      if (!extractionStarted) throw new Error(extractionError);
+      const extractionResponse = await fetch(`/api/business-cards/${created.cardId}/extract`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ workspaceSlug }) });
+      const extraction = await extractionResponse.json() as { error?: string };
+      if (!extractionResponse.ok) throw new Error(extraction.error || "AI analysis could not be started.");
       for (let attempt = 0; attempt < 90; attempt += 1) {
         await new Promise((resolve) => window.setTimeout(resolve, 2000));
         const statusResponse = await fetch(`/api/business-cards/${created.cardId}?workspace=${encodeURIComponent(workspaceSlug)}`, { cache: "no-store" });
