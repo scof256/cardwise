@@ -1,0 +1,17 @@
+.next
+node_modules
+.git
+.agents
+.codex
+.openai
+.swc
+.vinext
+.wrangler
+build
+dist
+examples
+worker
+*.log
+.env
+.env.*
+!.env.example

@@ -528,11 +528,13 @@ export function CardwiseApp({ workspaceSlug, workspaceName = "Personal workspace
     const params = new URLSearchParams(window.location.search);
     const requestedView = params.get("view");
     const permittedViews = new Set(["overview", "upload", "companies", "contacts", "events", "chat", "search", "recent", "categories", "duplicates", "settings"]);
-    if (requestedView && permittedViews.has(requestedView)) setActive(requestedView);
+    if (requestedView && permittedViews.has(requestedView)) window.setTimeout(() => setActive(requestedView), 0);
     const requestedPrompt = params.get("prompt")?.trim();
     if (requestedView === "chat" && requestedPrompt) {
-      setChatPrompt(requestedPrompt);
-      setChatRequestId((value) => value + 1);
+      window.setTimeout(() => {
+        setChatPrompt(requestedPrompt);
+        setChatRequestId((value) => value + 1);
+      }, 0);
     }
   }, []);
   useEffect(() => { const onKeyDown = (event: KeyboardEvent) => { if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "k") { event.preventDefault(); document.querySelector<HTMLInputElement | HTMLTextAreaElement>(".floating-ai-input, .chat-composer textarea")?.focus(); } if (event.key === "Escape") setMobileNav(false); }; window.addEventListener("keydown", onKeyDown); return () => window.removeEventListener("keydown", onKeyDown); }, []);

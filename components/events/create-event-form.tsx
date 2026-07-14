@@ -41,7 +41,7 @@ function localDateTime(value: string | undefined, fallback: Date) {
 export function CreateEventForm({ workspaceSlug, initialEvent }: { workspaceSlug: string; initialEvent?: EventFormInitialValues }) {
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
-  const nextWeek = new Date(Date.now() + 7 * 86400000);
+  const [nextWeek] = useState(() => new Date(Date.now() + 7 * 86400000));
   const defaultStart = localDateTime(initialEvent?.startsAt, nextWeek);
   const defaultEnd = localDateTime(initialEvent?.endsAt, new Date(nextWeek.getTime() + 6 * 3600000));
 

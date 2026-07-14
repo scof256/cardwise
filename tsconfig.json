@@ -24,11 +24,35 @@
   },
   "include": [
     "next-env.d.ts",
-    "**/*.ts",
-    "**/*.tsx",
+    "app/**/*.ts",
+    "app/**/*.tsx",
+    "components/**/*.ts",
+    "components/**/*.tsx",
+    "db/**/*.ts",
+    "db/**/*.tsx",
+    "lib/**/*.ts",
+    "lib/**/*.tsx",
+    "scripts/**/*.ts",
+    "scripts/**/*.mts",
+    "workflows/**/*.ts",
+    "workflows/**/*.tsx",
+    "drizzle.config.ts",
+    "next.config.ts",
+    "proxy.ts",
     ".next/types/**/*.ts",
-    ".next/dev/types/**/*.ts",
-    "**/*.mts"
+    ".next/dev/types/**/*.ts"
   ],
-  "exclude": ["node_modules", ".agents", ".codex"]
+  "exclude": [
+    "node_modules",
+    ".agents",
+    ".codex",
+    ".openai",
+    ".swc",
+    ".vinext",
+    ".wrangler",
+    "build",
+    "dist",
+    "examples",
+    "worker"
+  ]
 }

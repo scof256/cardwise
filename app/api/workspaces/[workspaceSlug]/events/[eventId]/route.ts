@@ -8,7 +8,8 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ wo
     const { workspaceSlug, eventId } = await params;
     const raw = await request.json() as Record<string, unknown>;
     const expectedUpdatedAt = raw.expectedUpdatedAt ? z.string().datetime().parse(raw.expectedUpdatedAt) : undefined;
-    const { expectedUpdatedAt: _ignored, ...eventValues } = raw;
+    const eventValues = { ...raw };
+    delete eventValues.expectedUpdatedAt;
     const input = eventInputSchema.parse(eventValues);
     const event = await updateWorkspaceEvent(workspaceSlug, eventId, input, expectedUpdatedAt ? new Date(expectedUpdatedAt) : undefined);
     return NextResponse.json({ event });
