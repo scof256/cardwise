@@ -12,6 +12,7 @@ export type Company = {
   services: string[];
   accent: string;
   added: string;
+  originalImages?: Array<{ id: string; side: string; url: string }>;
 };
 
 export const DEMO_WORKSPACE_ID = "cardwise-preview";

@@ -62,7 +62,8 @@ function Brand() {
 }
 
 function CardArtwork({ company = companies[0], image, side = "front" }: { company?: Company; image?: string; side?: "front" | "back" }) {
-  if (image) return <Image unoptimized width={640} height={360} className="uploaded-card-image" src={image} alt="Uploaded business card" />;
+  const storedImage = image ?? company.originalImages?.find((cardImage) => cardImage.side === side)?.url ?? company.originalImages?.[side === "back" ? 1 : 0]?.url ?? company.originalImages?.[0]?.url;
+  if (storedImage) return <Image unoptimized width={640} height={360} className="uploaded-card-image" src={storedImage} alt={`${side} of original business card for ${company.name}`} />;
   if (side === "back") return <div className={`card-art card-art-back ${company.accent}`}><div className="card-art-company">{company.name}</div><p>{company.services.join(" · ")}</p><div className="card-art-details"><span>{company.site}</span><span>{company.location}</span></div><div className="card-art-bars"><i /><i /><i /></div></div>;
   return (
     <div className={`card-art ${company.accent}`}>

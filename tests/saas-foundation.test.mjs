@@ -70,6 +70,16 @@ test("card uploads never fall back to hard-coded extraction results", async () =
   assert.doesNotMatch(client, /window\.setTimeout\(\(\) => onReview\(images\)/);
 });
 
+test("directory records render their authenticated original card images", async () => {
+  const workspace = await read("app/app/[workspaceSlug]/page.tsx");
+  const client = await read("app/cardwise-app.tsx");
+  assert.match(workspace, /businessCardImages/);
+  assert.match(workspace, /originalImages:/);
+  assert.match(workspace, /\/api\/card-images\/\$\{image\.id\}/);
+  assert.match(client, /company\.originalImages\?/);
+  assert.match(client, /src=\{storedImage\}/);
+});
+
 test("billing and identity webhooks verify signatures and are idempotent", async () => {
   const clerk = await read("app/api/webhooks/clerk/route.ts");
   const stripe = await read("app/api/webhooks/stripe/route.ts");
