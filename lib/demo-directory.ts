@@ -6,12 +6,23 @@ export type Company = {
   role: string;
   phone: string;
   email: string;
+  companyPhones?: string[];
+  companyEmails?: string[];
+  contactPhones?: string[];
+  contactEmails?: string[];
   site: string;
   location: string;
   category: string;
   services: string[];
+  tagline?: string;
+  description?: string;
+  industry?: string;
+  department?: string;
+  socialMedia?: string[];
+  otherInformation?: Array<{ label: string; value: string }>;
   accent: string;
   added: string;
+  originalImages?: Array<{ id: string; side: string; url: string }>;
 };
 
 export const DEMO_WORKSPACE_ID = "cardwise-preview";
@@ -32,8 +43,16 @@ export function companySearchContent(company: Company) {
     `Job title: ${company.role}`,
     `Phone: ${company.phone}`,
     `Email: ${company.email}`,
+    `All phones: ${[...(company.companyPhones ?? []), ...(company.contactPhones ?? [])].join(", ")}`,
+    `All emails: ${[...(company.companyEmails ?? []), ...(company.contactEmails ?? [])].join(", ")}`,
     `Website: ${company.site}`,
     `Address: ${company.location}`,
+    `Tagline: ${company.tagline ?? ""}`,
+    `Description: ${company.description ?? ""}`,
+    `Industry: ${company.industry ?? ""}`,
+    `Department: ${company.department ?? ""}`,
+    `Social media: ${(company.socialMedia ?? []).join(", ")}`,
+    `Other information: ${(company.otherInformation ?? []).map((item) => `${item.label}: ${item.value}`).join(", ")}`,
     `Date added: ${company.added}`,
   ].join("\n");
 }

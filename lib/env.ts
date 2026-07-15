@@ -5,7 +5,9 @@ const serverEnvironmentSchema = z.object({
   DATABASE_URL: z.string().url().optional(),
   CLERK_SECRET_KEY: z.string().min(1).optional(),
   CLERK_WEBHOOK_SIGNING_SECRET: z.string().min(1).optional(),
-  BLOB_READ_WRITE_TOKEN: z.string().min(1).optional(),
+  NEXT_PUBLIC_SUPABASE_URL: z.string().url().optional(),
+  NEXT_PUBLIC_SUPABASE_STORAGE_BUCKET: z.string().min(1).optional(),
+  SUPABASE_SERVICE_ROLE_KEY: z.string().min(1).optional(),
   UPSTASH_REDIS_REST_URL: z.string().url().optional(),
   UPSTASH_REDIS_REST_TOKEN: z.string().min(1).optional(),
   AI_GATEWAY_API_KEY: z.string().min(1).optional(),
@@ -17,7 +19,9 @@ export const serverEnvironment = serverEnvironmentSchema.parse({
   DATABASE_URL: process.env.DATABASE_URL || undefined,
   CLERK_SECRET_KEY: process.env.CLERK_SECRET_KEY || undefined,
   CLERK_WEBHOOK_SIGNING_SECRET: process.env.CLERK_WEBHOOK_SIGNING_SECRET || undefined,
-  BLOB_READ_WRITE_TOKEN: process.env.BLOB_READ_WRITE_TOKEN || undefined,
+  NEXT_PUBLIC_SUPABASE_URL: process.env.NEXT_PUBLIC_SUPABASE_URL || undefined,
+  NEXT_PUBLIC_SUPABASE_STORAGE_BUCKET: process.env.NEXT_PUBLIC_SUPABASE_STORAGE_BUCKET || undefined,
+  SUPABASE_SERVICE_ROLE_KEY: process.env.SUPABASE_SERVICE_ROLE_KEY || undefined,
   UPSTASH_REDIS_REST_URL: process.env.UPSTASH_REDIS_REST_URL || undefined,
   UPSTASH_REDIS_REST_TOKEN: process.env.UPSTASH_REDIS_REST_TOKEN || undefined,
   AI_GATEWAY_API_KEY: process.env.AI_GATEWAY_API_KEY || undefined,
@@ -34,4 +38,3 @@ export function requireEnvironment<K extends keyof typeof serverEnvironment>(key
   if (!value) throw new Error(`${key} is not configured.`);
   return value;
 }
-

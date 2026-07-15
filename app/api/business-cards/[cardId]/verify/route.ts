@@ -20,6 +20,15 @@ const normalizedDomain = (value: string) => {
 };
 const normalizePhone = (value: string) => parsePhoneNumberFromString(value, "UG")?.number ?? value.replace(/\D/g, "");
 const parseOtherInformation = (value: string) => value.split("\n").map((line) => line.trim()).filter(Boolean).map((line) => { const separator = line.indexOf(":"); return separator > 0 ? { label: line.slice(0, separator).trim(), value: line.slice(separator + 1).trim() } : { label: "Note", value: line }; });
+const inferSocialKind = (value: string) => {
+  const normalized = value.toLowerCase();
+  if (normalized.includes("linkedin")) return "linkedin" as const;
+  if (normalized.includes("instagram")) return "instagram" as const;
+  if (normalized.includes("facebook")) return "facebook" as const;
+  if (normalized.includes("whatsapp") || normalized.includes("wa.me")) return "whatsapp" as const;
+  if (normalized.includes("twitter") || /(^|\W)x\.com/i.test(normalized)) return "x" as const;
+  return "other" as const;
+};
 
 export async function POST(request: Request, { params }: { params: Promise<{ cardId: string }> }) {
   const parsed = reviewSchema.safeParse(await request.json());
@@ -45,17 +54,24 @@ export async function POST(request: Request, { params }: { params: Promise<{ car
   const companyEmails = splitValues(input.companyEmails).map((email) => email.toLowerCase());
   const contactPhones = splitValues(input.contactPhones);
   const contactEmails = splitValues(input.contactEmails).map((email) => email.toLowerCase());
+  const socialMedia = splitValues(input.socialMedia);
   const services = splitValues(input.productsServices);
+  const otherInformation = parseOtherInformation(input.otherInformation);
+  const labelForValue = (value: string) => {
+    const comparable = value.replace(/\D/g, "") || value.toLowerCase();
+    return otherInformation.find((item) => (item.value.replace(/\D/g, "") || item.value.toLowerCase()) === comparable)?.label ?? null;
+  };
   const possibleDuplicates = domain ? await getDb().select({ id: directoryCompanies.id, normalizedDomain: directoryCompanies.normalizedDomain }).from(directoryCompanies).where(and(eq(directoryCompanies.workspaceId, context.workspaceId), eq(directoryCompanies.normalizedDomain, domain), eq(directoryCompanies.status, "active"))).limit(5) : [];
 
   await getDb().transaction(async (tx) => {
-    await tx.insert(directoryCompanies).values({ id: companyId, workspaceId: context.workspaceId, companyName: input.companyName, normalizedName: normalizeSearchValue(input.companyName), tagline: input.tagline || null, description: input.description || null, industry: input.industry || null, category: input.category || null, productsServicesSummary: services.join(", ") || null, websiteUrl: input.website || null, normalizedDomain: domain, physicalAddressSummary: input.physicalAddress || null, otherInformation: parseOtherInformation(input.otherInformation), ownerUserId: context.userId, createdByUserId: context.userId });
+    await tx.insert(directoryCompanies).values({ id: companyId, workspaceId: context.workspaceId, companyName: input.companyName, normalizedName: normalizeSearchValue(input.companyName), tagline: input.tagline || null, description: input.description || null, industry: input.industry || null, category: input.category || null, productsServicesSummary: services.join(", ") || null, websiteUrl: input.website || null, normalizedDomain: domain, physicalAddressSummary: input.physicalAddress || null, otherInformation, ownerUserId: context.userId, createdByUserId: context.userId });
     if (contactId) await tx.insert(contacts).values({ id: contactId, workspaceId: context.workspaceId, directoryCompanyId: companyId, fullName: input.fullName.trim(), normalizedName: normalizeSearchValue(input.fullName), jobTitle: input.jobTitle || null, department: input.department || null, ownerUserId: context.userId, createdByUserId: context.userId });
     const methods = [
-      ...companyPhones.map((value, index) => ({ id: createId(), workspaceId: context.workspaceId, ownerType: "company" as const, ownerId: companyId, kind: "phone" as const, displayValue: value, normalizedValue: normalizePhone(value), isPrimary: index === 0, sourceType: "business_card", sourceId: cardId })),
+      ...companyPhones.map((value, index) => ({ id: createId(), workspaceId: context.workspaceId, ownerType: "company" as const, ownerId: companyId, kind: "phone" as const, label: labelForValue(value), displayValue: value, normalizedValue: normalizePhone(value), isPrimary: index === 0, sourceType: "business_card", sourceId: cardId })),
       ...companyEmails.map((value, index) => ({ id: createId(), workspaceId: context.workspaceId, ownerType: "company" as const, ownerId: companyId, kind: "email" as const, displayValue: value, normalizedValue: value, isPrimary: index === 0, sourceType: "business_card", sourceId: cardId })),
       ...(input.website ? [{ id: createId(), workspaceId: context.workspaceId, ownerType: "company" as const, ownerId: companyId, kind: "website" as const, displayValue: input.website, normalizedValue: domain ?? input.website.toLowerCase(), isPrimary: true, sourceType: "business_card", sourceId: cardId }] : []),
-      ...(contactId ? contactPhones.map((value, index) => ({ id: createId(), workspaceId: context.workspaceId, ownerType: "contact" as const, ownerId: contactId, kind: "phone" as const, displayValue: value, normalizedValue: normalizePhone(value), isPrimary: index === 0, sourceType: "business_card", sourceId: cardId })) : []),
+      ...socialMedia.map((value, index) => ({ id: createId(), workspaceId: context.workspaceId, ownerType: "company" as const, ownerId: companyId, kind: inferSocialKind(value), displayValue: value, normalizedValue: value.toLowerCase(), isPrimary: index === 0, sourceType: "business_card", sourceId: cardId })),
+      ...(contactId ? contactPhones.map((value, index) => ({ id: createId(), workspaceId: context.workspaceId, ownerType: "contact" as const, ownerId: contactId, kind: "phone" as const, label: labelForValue(value), displayValue: value, normalizedValue: normalizePhone(value), isPrimary: index === 0, sourceType: "business_card", sourceId: cardId })) : []),
       ...(contactId ? contactEmails.map((value, index) => ({ id: createId(), workspaceId: context.workspaceId, ownerType: "contact" as const, ownerId: contactId, kind: "email" as const, displayValue: value, normalizedValue: value, isPrimary: index === 0, sourceType: "business_card", sourceId: cardId })) : []),
     ];
     if (methods.length) await tx.insert(contactMethods).values(methods);

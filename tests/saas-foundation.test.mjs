@@ -11,10 +11,12 @@ test("uses the production Next.js stack with Supabase and no legacy vinext runti
   assert.equal(packageJson.scripts.build, "next build");
   assert.ok(packageJson.dependencies["@clerk/nextjs"]);
   assert.ok(packageJson.dependencies.postgres, "postgres driver for Supabase");
+  assert.ok(packageJson.dependencies["@supabase/supabase-js"], "Supabase client for private image storage");
   assert.ok(packageJson.dependencies["drizzle-orm"], "drizzle-orm for Supabase");
   assert.ok(packageJson.dependencies.workflow);
   assert.equal(packageJson.dependencies.vinext, undefined);
   assert.equal(packageJson.dependencies["@neondatabase/serverless"], undefined, "legacy Neon driver removed");
+  assert.equal(packageJson.dependencies["@vercel/blob"], undefined, "card images stay in Supabase Storage");
   assert.equal(packageJson.devDependencies.wrangler, undefined);
 });
 
@@ -26,26 +28,97 @@ test("tenant repositories bind reads and writes to workspace id", async () => {
   assert.doesNotMatch(companies, /getCompanyById\(id/);
 });
 
-test("private uploads use workspace-prefixed blob paths and signed callbacks", async () => {
-  const storage = await read("lib/storage/blob.ts");
+test("private uploads use workspace-prefixed Supabase Storage paths and signed uploads", async () => {
+  const storage = await read("lib/storage/supabase.ts");
   const upload = await read("app/api/uploads/business-card/route.ts");
+  const migration = await read("supabase/migrations/20260714223442_configure_directory_media_bucket.sql");
   assert.match(storage, /workspaces\/\$\{workspaceId\}\/cards\/\$\{businessCardId\}/);
-  assert.match(storage, /access: "private"/);
-  assert.match(upload, /handleUpload/);
+  assert.match(storage, /createSignedUploadUrl/);
+  assert.match(storage, /SUPABASE_SERVICE_ROLE_KEY/);
+  assert.match(upload, /createPrivateUploadToken/);
+  assert.match(upload, /privateObjectExists/);
   assert.match(upload, /requireWorkspacePermission/);
   assert.match(upload, /checksumSha256/);
+  assert.match(migration, /'directory-media'/);
+  assert.match(migration, /file_size_limit/);
+  assert.match(migration, /allowed_mime_types/);
 });
 
 test("multimodal extraction is durable and strictly schema-driven", async () => {
   const workflow = await read("workflows/extract-business-card.ts");
   const schema = await read("lib/ai/business-card-schema.ts");
+  const model = await read("lib/ai/extraction-model.ts");
   assert.match(workflow, /"use workflow"/);
   assert.match(workflow, /"use step"/);
   assert.match(workflow, /Output\.object\(\{ schema: businessCardExtractionSchema \}\)/);
+  assert.match(workflow, /model: getExtractionModel\(\)/);
+  assert.match(workflow, /type: "file", data: bytes, mediaType: image\.mimeType/);
   assert.match(workflow, /status: "awaiting_review"/);
+  assert.match(model, /provider\.chat\(modelId\)/);
+  assert.match(model, /process\.env\.OPENAI_BASE_URL/);
   assert.match(schema, /Never invent content/);
+  assert.match(schema, /every distinct phone number, WhatsApp number, email address/);
+  assert.match(schema, /Never keep only the first contact value/);
   assert.match(schema, /overallConfidence/);
   assert.match(schema, /otherInformation/);
+});
+
+test("card uploads never fall back to hard-coded extraction results", async () => {
+  const home = await read("app/page.tsx");
+  const client = await read("app/cardwise-app.tsx");
+  assert.match(home, /redirect\(workspace \? `\/app\/\$\{workspace\.slug\}` : "\/onboarding"\)/);
+  assert.match(client, /Sign in and open a workspace before uploading a card/);
+  assert.doesNotMatch(client, /value="Kampala Print Studio"/);
+  assert.doesNotMatch(client, /window\.setTimeout\(\(\) => onReview\(images\)/);
+});
+
+test("directory records render their authenticated original card images", async () => {
+  const workspace = await read("app/app/[workspaceSlug]/page.tsx");
+  const client = await read("app/cardwise-app.tsx");
+  assert.match(workspace, /businessCardImages/);
+  assert.match(workspace, /originalImages:/);
+  assert.match(workspace, /\/api\/card-images\/\$\{image\.id\}/);
+  assert.match(client, /company\.originalImages\?/);
+  assert.match(client, /src=\{storedImage\}/);
+});
+
+test("all extracted contact values and card details survive review, storage, and display", async () => {
+  const workspace = await read("app/app/[workspaceSlug]/page.tsx");
+  const review = await read("components/review-editor.tsx");
+  const verify = await read("app/api/business-cards/[cardId]/verify/route.ts");
+  const edit = await read("app/api/directory-companies/[companyId]/route.ts");
+  const client = await read("app/cardwise-app.tsx");
+  assert.match(review, /Company phone numbers/);
+  assert.match(review, /Company email addresses/);
+  assert.match(review, /Social media & handles/);
+  assert.match(review, /Company description/);
+  assert.match(verify, /socialMedia\.map/);
+  assert.match(workspace, /companyPhones/);
+  assert.match(workspace, /contactPhones/);
+  assert.match(workspace, /otherInformation: record\.otherInformation/);
+  assert.match(edit, /contactPhones: z\.string/);
+  assert.match(edit, /companyPhones\.map/);
+  assert.match(client, /allPhones\.map/);
+  assert.match(client, /All extracted details/);
+});
+
+test("directory cards support tenant-scoped persistent editing and privacy-safe deletion", async () => {
+  const route = await read("app/api/directory-companies/[companyId]/route.ts");
+  const client = await read("app/cardwise-app.tsx");
+  const storage = await read("lib/storage/supabase.ts");
+  assert.match(route, /requireWritableCompany/);
+  assert.match(route, /directory:write:any/);
+  assert.match(route, /directory:write:own/);
+  assert.match(route, /export async function PATCH/);
+  assert.match(route, /export async function DELETE/);
+  assert.match(route, /directory_company\.updated/);
+  assert.match(route, /directory_company\.deleted/);
+  assert.match(route, /delete\(searchDocuments\)/);
+  assert.match(route, /removePrivateObjects/);
+  assert.match(storage, /\.remove\(uniquePathnames\)/);
+  assert.match(client, /method: "PATCH"/);
+  assert.match(client, /method: "DELETE"/);
+  assert.match(client, /Delete permanently/);
 });
 
 test("billing and identity webhooks verify signatures and are idempotent", async () => {
