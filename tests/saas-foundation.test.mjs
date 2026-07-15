@@ -57,6 +57,8 @@ test("multimodal extraction is durable and strictly schema-driven", async () => 
   assert.match(model, /provider\.chat\(modelId\)/);
   assert.match(model, /process\.env\.OPENAI_BASE_URL/);
   assert.match(schema, /Never invent content/);
+  assert.match(schema, /every distinct phone number, WhatsApp number, email address/);
+  assert.match(schema, /Never keep only the first contact value/);
   assert.match(schema, /overallConfidence/);
   assert.match(schema, /otherInformation/);
 });
@@ -78,6 +80,26 @@ test("directory records render their authenticated original card images", async 
   assert.match(workspace, /\/api\/card-images\/\$\{image\.id\}/);
   assert.match(client, /company\.originalImages\?/);
   assert.match(client, /src=\{storedImage\}/);
+});
+
+test("all extracted contact values and card details survive review, storage, and display", async () => {
+  const workspace = await read("app/app/[workspaceSlug]/page.tsx");
+  const review = await read("components/review-editor.tsx");
+  const verify = await read("app/api/business-cards/[cardId]/verify/route.ts");
+  const edit = await read("app/api/directory-companies/[companyId]/route.ts");
+  const client = await read("app/cardwise-app.tsx");
+  assert.match(review, /Company phone numbers/);
+  assert.match(review, /Company email addresses/);
+  assert.match(review, /Social media & handles/);
+  assert.match(review, /Company description/);
+  assert.match(verify, /socialMedia\.map/);
+  assert.match(workspace, /companyPhones/);
+  assert.match(workspace, /contactPhones/);
+  assert.match(workspace, /otherInformation: record\.otherInformation/);
+  assert.match(edit, /contactPhones: z\.string/);
+  assert.match(edit, /companyPhones\.map/);
+  assert.match(client, /allPhones\.map/);
+  assert.match(client, /All extracted details/);
 });
 
 test("directory cards support tenant-scoped persistent editing and privacy-safe deletion", async () => {

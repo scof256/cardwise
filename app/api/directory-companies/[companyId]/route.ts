@@ -27,11 +27,19 @@ export const runtime = "nodejs";
 const updateCompanySchema = z.object({
   workspaceSlug: z.string().trim().min(1).max(160),
   name: z.string().trim().min(1).max(240),
+  industry: z.string().trim().max(160),
   category: z.string().trim().max(160),
+  tagline: z.string().trim().max(500),
+  description: z.string().trim().max(4000),
   contact: z.string().trim().max(240),
   role: z.string().trim().max(160),
-  phone: z.string().trim().max(100),
-  email: z.union([z.literal(""), z.string().trim().email().max(320)]),
+  department: z.string().trim().max(240),
+  companyPhones: z.string().max(1000),
+  companyEmails: z.string().max(2000),
+  contactPhones: z.string().max(1000),
+  contactEmails: z.string().max(2000),
+  socialMedia: z.string().max(2000),
+  otherInformation: z.string().max(12000),
   site: z.string().trim().max(500),
   location: z.string().trim().max(500),
 });
@@ -46,6 +54,21 @@ class ApiError extends Error {
 function normalizePhone(value: string) {
   return value ? (parsePhoneNumberFromString(value)?.number ?? value.replace(/[^\d+]/g, "")) : "";
 }
+
+const splitValues = (value: string) => [...new Set(value.split(/[,;\n]/).map((item) => item.trim()).filter(Boolean))];
+const parseOtherInformation = (value: string) => value.split("\n").map((line) => line.trim()).filter(Boolean).map((line) => {
+  const separator = line.indexOf(":");
+  return separator > 0 ? { label: line.slice(0, separator).trim(), value: line.slice(separator + 1).trim() } : { label: "Note", value: line };
+});
+const inferSocialKind = (value: string) => {
+  const normalized = value.toLowerCase();
+  if (normalized.includes("linkedin")) return "linkedin" as const;
+  if (normalized.includes("instagram")) return "instagram" as const;
+  if (normalized.includes("facebook")) return "facebook" as const;
+  if (normalized.includes("whatsapp") || normalized.includes("wa.me")) return "whatsapp" as const;
+  if (normalized.includes("twitter") || /(^|\W)x\.com/i.test(normalized)) return "x" as const;
+  return "other" as const;
+};
 
 function normalizeDomain(value: string) {
   if (!value) return "";
@@ -101,6 +124,16 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ co
     const { context, company } = await requireWritableCompany(input.workspaceSlug, companyId);
     const db = getDb();
     const now = new Date();
+    const companyPhones = splitValues(input.companyPhones);
+    const companyEmails = splitValues(input.companyEmails).map((email) => email.toLowerCase());
+    const contactPhones = splitValues(input.contactPhones);
+    const contactEmails = splitValues(input.contactEmails).map((email) => email.toLowerCase());
+    const socialMedia = splitValues(input.socialMedia);
+    const otherInformation = parseOtherInformation(input.otherInformation);
+    const labelForValue = (value: string) => {
+      const comparable = value.replace(/\D/g, "") || value.toLowerCase();
+      return otherInformation.find((item) => (item.value.replace(/\D/g, "") || item.value.toLowerCase()) === comparable)?.label ?? null;
+    };
     const [primaryContact] = await db
       .select()
       .from(contacts)
@@ -120,10 +153,14 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ co
         .set({
           companyName: input.name,
           normalizedName: normalizeSearchValue(input.name),
+          industry: input.industry || null,
           category: input.category || null,
+          tagline: input.tagline || null,
+          description: input.description || null,
           websiteUrl: input.site || null,
           normalizedDomain: normalizeDomain(input.site) || null,
           physicalAddressSummary: input.location || null,
+          otherInformation,
           updatedAt: now,
         })
         .where(and(eq(directoryCompanies.workspaceId, context.workspaceId), eq(directoryCompanies.id, companyId)));
@@ -136,6 +173,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ co
               fullName: input.contact,
               normalizedName: normalizeSearchValue(input.contact),
               jobTitle: input.role || null,
+              department: input.department || null,
               updatedAt: now,
             })
             .where(eq(contacts.id, primaryContact.id));
@@ -148,6 +186,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ co
             fullName: input.contact,
             normalizedName: normalizeSearchValue(input.contact),
             jobTitle: input.role || null,
+            department: input.department || null,
             ownerUserId: company.ownerUserId,
             createdByUserId: context.userId,
           });
@@ -178,38 +217,6 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ co
         savedContactId = null;
       }
 
-      const methodOwnerType = savedContactId ? "contact" : "company";
-      const methodOwnerId = savedContactId ?? companyId;
-      for (const method of [
-        { kind: "phone" as const, value: input.phone, normalizedValue: normalizePhone(input.phone) },
-        { kind: "email" as const, value: input.email, normalizedValue: input.email.toLowerCase() },
-      ]) {
-        await tx
-          .delete(contactMethods)
-          .where(
-            and(
-              eq(contactMethods.workspaceId, context.workspaceId),
-              eq(contactMethods.ownerType, methodOwnerType),
-              eq(contactMethods.ownerId, methodOwnerId),
-              eq(contactMethods.kind, method.kind),
-            ),
-          );
-        if (method.value) {
-          await tx.insert(contactMethods).values({
-            id: createId(),
-            workspaceId: context.workspaceId,
-            ownerType: methodOwnerType,
-            ownerId: methodOwnerId,
-            kind: method.kind,
-            displayValue: method.value,
-            normalizedValue: method.normalizedValue,
-            isPrimary: true,
-            isVerified: false,
-            sourceType: "manual",
-          });
-        }
-      }
-
       await tx
         .delete(contactMethods)
         .where(
@@ -217,23 +224,33 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ co
             eq(contactMethods.workspaceId, context.workspaceId),
             eq(contactMethods.ownerType, "company"),
             eq(contactMethods.ownerId, companyId),
-            eq(contactMethods.kind, "website"),
+            inArray(contactMethods.kind, ["phone", "email", "website", "linkedin", "x", "instagram", "facebook", "whatsapp", "other"]),
           ),
         );
-      if (input.site) {
-        await tx.insert(contactMethods).values({
-          id: createId(),
-          workspaceId: context.workspaceId,
-          ownerType: "company",
-          ownerId: companyId,
-          kind: "website",
-          displayValue: input.site,
-          normalizedValue: normalizeDomain(input.site),
-          isPrimary: true,
-          isVerified: false,
-          sourceType: "manual",
-        });
+
+      if (savedContactId) {
+        await tx
+          .delete(contactMethods)
+          .where(
+            and(
+              eq(contactMethods.workspaceId, context.workspaceId),
+              eq(contactMethods.ownerType, "contact"),
+              eq(contactMethods.ownerId, savedContactId),
+              inArray(contactMethods.kind, ["phone", "email"]),
+            ),
+          );
       }
+
+      const contactMethodOwnerId = savedContactId;
+      const methods = [
+        ...companyPhones.map((value, index) => ({ id: createId(), workspaceId: context.workspaceId, ownerType: "company" as const, ownerId: companyId, kind: "phone" as const, label: labelForValue(value), displayValue: value, normalizedValue: normalizePhone(value), isPrimary: index === 0, isVerified: false, sourceType: "manual" })),
+        ...companyEmails.map((value, index) => ({ id: createId(), workspaceId: context.workspaceId, ownerType: "company" as const, ownerId: companyId, kind: "email" as const, displayValue: value, normalizedValue: value, isPrimary: index === 0, isVerified: false, sourceType: "manual" })),
+        ...(input.site ? [{ id: createId(), workspaceId: context.workspaceId, ownerType: "company" as const, ownerId: companyId, kind: "website" as const, displayValue: input.site, normalizedValue: normalizeDomain(input.site), isPrimary: true, isVerified: false, sourceType: "manual" }] : []),
+        ...socialMedia.map((value, index) => ({ id: createId(), workspaceId: context.workspaceId, ownerType: "company" as const, ownerId: companyId, kind: inferSocialKind(value), displayValue: value, normalizedValue: value.toLowerCase(), isPrimary: index === 0, isVerified: false, sourceType: "manual" })),
+        ...(contactMethodOwnerId ? contactPhones.map((value, index) => ({ id: createId(), workspaceId: context.workspaceId, ownerType: "contact" as const, ownerId: contactMethodOwnerId, kind: "phone" as const, label: labelForValue(value), displayValue: value, normalizedValue: normalizePhone(value), isPrimary: index === 0, isVerified: false, sourceType: "manual" })) : []),
+        ...(contactMethodOwnerId ? contactEmails.map((value, index) => ({ id: createId(), workspaceId: context.workspaceId, ownerType: "contact" as const, ownerId: contactMethodOwnerId, kind: "email" as const, displayValue: value, normalizedValue: value, isPrimary: index === 0, isVerified: false, sourceType: "manual" })) : []),
+      ];
+      if (methods.length) await tx.insert(contactMethods).values(methods);
 
       await tx
         .delete(addresses)
@@ -271,9 +288,18 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ co
         },
         after: {
           companyName: input.name,
+          industry: input.industry || null,
           category: input.category || null,
+          tagline: input.tagline || null,
+          description: input.description || null,
           websiteUrl: input.site || null,
           physicalAddressSummary: input.location || null,
+          companyPhones,
+          companyEmails,
+          contactPhones,
+          contactEmails,
+          socialMedia,
+          otherInformation,
         },
       });
     });
@@ -294,15 +320,22 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ co
         entityId: companyId,
         content: buildCompanySearchContent({
           companyName: input.name,
+          industry: input.industry || null,
           category: input.category || null,
+          tagline: input.tagline || null,
+          description: input.description || null,
           website: input.site || null,
           physicalAddress: input.location || null,
-          otherInformation: company.otherInformation.map((item) => `${item.label}: ${item.value}`).join("\n"),
+          otherInformation: otherInformation.map((item) => `${item.label}: ${item.value}`).join("\n"),
           productsServices: services.map((service) => service.name),
+          phones: companyPhones,
+          emails: companyEmails,
+          socialMedia: socialMedia.join(", "),
           contactName: input.contact || null,
           jobTitle: input.role || null,
-          contactPhones: input.phone ? [input.phone] : [],
-          contactEmails: input.email ? [input.email] : [],
+          department: input.department || null,
+          contactPhones,
+          contactEmails,
         }),
       });
     } catch (error) {
@@ -320,10 +353,20 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ co
           .map((word) => word[0]?.toUpperCase())
           .join(""),
         category: input.category,
+        industry: input.industry,
+        tagline: input.tagline,
+        description: input.description,
         contact: input.contact,
         role: input.role,
-        phone: input.phone,
-        email: input.email,
+        department: input.department,
+        companyPhones,
+        companyEmails,
+        contactPhones,
+        contactEmails,
+        phone: contactPhones[0] ?? companyPhones[0] ?? "",
+        email: contactEmails[0] ?? companyEmails[0] ?? "",
+        socialMedia,
+        otherInformation,
         site: input.site,
         location: input.location,
       },

@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Image from "next/image";
 import { useChat } from "@ai-sdk/react";
 import { DefaultChatTransport } from "ai";
@@ -31,7 +31,11 @@ const sidebarNotifications: SidebarNotification[] = [
 const searchStopWords = new Set(["a", "an", "and", "are", "at", "business", "businesses", "card", "cards", "companies", "company", "contact", "contacts", "find", "for", "from", "in", "is", "me", "of", "provider", "providers", "sell", "selling", "service", "services", "show", "supplier", "suppliers", "that", "the", "these", "which", "who", "with"]);
 
 function searchableCompany(company: Company) {
-  return `${company.name} ${company.contact} ${company.role} ${company.phone} ${company.email} ${company.site} ${company.location} ${company.category} ${company.services.join(" ")}`.toLowerCase();
+  return `${company.name} ${company.contact} ${company.role} ${company.department ?? ""} ${company.phone} ${company.email} ${(company.companyPhones ?? []).join(" ")} ${(company.contactPhones ?? []).join(" ")} ${(company.companyEmails ?? []).join(" ")} ${(company.contactEmails ?? []).join(" ")} ${company.site} ${company.location} ${company.category} ${company.industry ?? ""} ${company.tagline ?? ""} ${company.description ?? ""} ${company.services.join(" ")} ${(company.socialMedia ?? []).join(" ")} ${(company.otherInformation ?? []).map((item) => `${item.label} ${item.value}`).join(" ")}`.toLowerCase();
+}
+
+function uniqueValues(...groups: Array<Array<string> | undefined>) {
+  return [...new Set(groups.flatMap((group) => group ?? []).map((value) => value.trim()).filter(Boolean))];
 }
 
 function searchCompanies(items: Company[], query: string) {
@@ -489,7 +493,7 @@ function Settings({ items, onSaved }: { items: Company[]; onSaved: (message: str
 
 function EmptyState({ title, copy, action, onAction }: { title: string; copy: string; action: string; onAction: () => void }) { return <section className="empty-state"><span>⌕</span><h2>{title}</h2><p>{copy}</p><button className="secondary" onClick={onAction}>{action}</button></section>; }
 
-function ContactEditor({ items, close, onSave }: { items: Company[]; close: () => void; onSave: (company: Company) => void }) { const [companyId, setCompanyId] = useState(String(items[0]?.id ?? "")); const selected = items.find((item) => String(item.id) === companyId); const [name, setName] = useState(""); const [role, setRole] = useState(""); const [phone, setPhone] = useState(""); const [email, setEmail] = useState(""); useEscape(close); const submit = (event: React.FormEvent) => { event.preventDefault(); if (!selected || !name.trim()) return; onSave({ ...selected, contact: name.trim(), role: role.trim(), phone: phone.trim(), email: email.trim() }); }; return <div className="modal-layer" onMouseDown={close}><form className="form-modal" role="dialog" aria-modal="true" aria-labelledby="contact-editor-title" onMouseDown={(event) => event.stopPropagation()} onSubmit={submit}><button className="modal-close" type="button" aria-label="Close contact editor" onClick={close}>×</button><span className="eyebrow">CONTACT</span><h2 id="contact-editor-title">Add a company contact</h2><label>Company<select value={companyId} onChange={(event) => setCompanyId(event.target.value)}>{items.map((item) => <option key={item.id} value={String(item.id)}>{item.name}</option>)}</select></label><label>Full name<input required value={name} onChange={(event) => setName(event.target.value)} /></label><label>Job title<input value={role} onChange={(event) => setRole(event.target.value)} /></label><label>Phone<input value={phone} onChange={(event) => setPhone(event.target.value)} /></label><label>Email<input type="email" value={email} onChange={(event) => setEmail(event.target.value)} /></label><button className="primary full" type="submit" disabled={!selected || !name.trim()}>Save contact</button></form></div>; }
+function ContactEditor({ items, close, onSave }: { items: Company[]; close: () => void; onSave: (company: Company) => void }) { const [companyId, setCompanyId] = useState(String(items[0]?.id ?? "")); const selected = items.find((item) => String(item.id) === companyId); const [name, setName] = useState(""); const [role, setRole] = useState(""); const [phone, setPhone] = useState(""); const [email, setEmail] = useState(""); useEscape(close); const submit = (event: React.FormEvent) => { event.preventDefault(); if (!selected || !name.trim()) return; onSave({ ...selected, contact: name.trim(), role: role.trim(), phone: phone.trim(), email: email.trim(), contactPhones: phone.trim() ? [phone.trim()] : [], contactEmails: email.trim() ? [email.trim()] : [] }); }; return <div className="modal-layer" onMouseDown={close}><form className="form-modal" role="dialog" aria-modal="true" aria-labelledby="contact-editor-title" onMouseDown={(event) => event.stopPropagation()} onSubmit={submit}><button className="modal-close" type="button" aria-label="Close contact editor" onClick={close}>×</button><span className="eyebrow">CONTACT</span><h2 id="contact-editor-title">Add a company contact</h2><label>Company<select value={companyId} onChange={(event) => setCompanyId(event.target.value)}>{items.map((item) => <option key={item.id} value={String(item.id)}>{item.name}</option>)}</select></label><label>Full name<input required value={name} onChange={(event) => setName(event.target.value)} /></label><label>Job title<input value={role} onChange={(event) => setRole(event.target.value)} /></label><label>Phone<input value={phone} onChange={(event) => setPhone(event.target.value)} /></label><label>Email<input type="email" value={email} onChange={(event) => setEmail(event.target.value)} /></label><button className="primary full" type="submit" disabled={!selected || !name.trim()}>Save contact</button></form></div>; }
 
 type RecordModalProps = {
   company: Company;
@@ -500,9 +504,21 @@ type RecordModalProps = {
   onViewCard?: () => void;
 };
 
+function editableDetailValues(company: Company) {
+  return {
+    companyPhones: (company.companyPhones ?? []).join("\n"),
+    companyEmails: (company.companyEmails ?? []).join("\n"),
+    contactPhones: (company.contactPhones?.length ? company.contactPhones : company.phone ? [company.phone] : []).join("\n"),
+    contactEmails: (company.contactEmails?.length ? company.contactEmails : company.email ? [company.email] : []).join("\n"),
+    socialMedia: (company.socialMedia ?? []).join("\n"),
+    otherInformation: (company.otherInformation ?? []).map((item) => `${item.label}: ${item.value}`).join("\n"),
+  };
+}
+
 function RecordModal({ company, workspaceSlug, close, onUpdate, onDelete, onViewCard }: RecordModalProps) {
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(company);
+  const [detailDraft, setDetailDraft] = useState(() => editableDetailValues(company));
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [confirmingDelete, setConfirmingDelete] = useState(false);
@@ -512,6 +528,7 @@ function RecordModal({ company, workspaceSlug, close, onUpdate, onDelete, onView
     else if (!saving && !deleting) close();
   }, [close, confirmingDelete, deleting, saving]);
   useEscape(handleEscape);
+  const setDetail = (key: keyof typeof detailDraft) => (event: React.ChangeEvent<HTMLTextAreaElement>) => setDetailDraft((current) => ({ ...current, [key]: event.target.value }));
 
   const save = async (event: React.FormEvent) => {
     event.preventDefault();
@@ -520,6 +537,10 @@ function RecordModal({ company, workspaceSlug, close, onUpdate, onDelete, onView
     if (!workspaceSlug) {
       const updated = {
         ...draft,
+        companyPhones: uniqueValues(detailDraft.companyPhones.split(/[,;\n]/)),
+        companyEmails: uniqueValues(detailDraft.companyEmails.split(/[,;\n]/)),
+        contactPhones: uniqueValues(detailDraft.contactPhones.split(/[,;\n]/)),
+        contactEmails: uniqueValues(detailDraft.contactEmails.split(/[,;\n]/)),
         initials: draft.name.split(/\s+/).slice(0, 2).map((part) => part[0]).join("").toUpperCase(),
       };
       onUpdate?.(updated);
@@ -535,11 +556,14 @@ function RecordModal({ company, workspaceSlug, close, onUpdate, onDelete, onView
         body: JSON.stringify({
           workspaceSlug,
           name: draft.name,
+          industry: draft.industry ?? "",
           category: draft.category,
+          tagline: draft.tagline ?? "",
+          description: draft.description ?? "",
           contact: draft.contact,
           role: draft.role,
-          phone: draft.phone,
-          email: draft.email,
+          department: draft.department ?? "",
+          ...detailDraft,
           site: draft.site,
           location: draft.location,
         }),
@@ -549,6 +573,7 @@ function RecordModal({ company, workspaceSlug, close, onUpdate, onDelete, onView
 
       const updated = { ...company, ...draft, ...result.company };
       setDraft(updated);
+      setDetailDraft(editableDetailValues(updated));
       setEditing(false);
       if (onUpdate) onUpdate(updated);
       else window.location.reload();
@@ -582,6 +607,10 @@ function RecordModal({ company, workspaceSlug, close, onUpdate, onDelete, onView
     }
   };
 
+  const allPhones = uniqueValues(company.contactPhones, company.companyPhones, company.phone ? [company.phone] : []);
+  const allEmails = uniqueValues(company.contactEmails, company.companyEmails, company.email ? [company.email] : []);
+  const hasAdditionalDetails = Boolean(company.tagline || company.description || company.industry || company.department || company.socialMedia?.length || company.otherInformation?.length);
+
   return (
     <div className="modal-layer" onMouseDown={close}>
       <div className="record-modal" role="dialog" aria-modal="true" aria-labelledby="record-title" onMouseDown={(event) => event.stopPropagation()}>
@@ -595,14 +624,22 @@ function RecordModal({ company, workspaceSlug, close, onUpdate, onDelete, onView
           <form className="record-edit-form" onSubmit={save}>
             <label>Company name<input required autoFocus value={draft.name} onChange={(event) => setDraft({ ...draft, name: event.target.value })} /></label>
             <label>Category<input value={draft.category} onChange={(event) => setDraft({ ...draft, category: event.target.value })} /></label>
+            <label>Industry<input value={draft.industry ?? ""} onChange={(event) => setDraft({ ...draft, industry: event.target.value })} /></label>
+            <label>Tagline<input value={draft.tagline ?? ""} onChange={(event) => setDraft({ ...draft, tagline: event.target.value })} /></label>
+            <label className="record-edit-wide">Company description<textarea value={draft.description ?? ""} onChange={(event) => setDraft({ ...draft, description: event.target.value })} /></label>
+            <label>Company phone numbers<textarea value={detailDraft.companyPhones} onChange={setDetail("companyPhones")} placeholder="One per line" /></label>
+            <label>Company email addresses<textarea value={detailDraft.companyEmails} onChange={setDetail("companyEmails")} placeholder="One per line" /></label>
             <label>Contact person<input value={draft.contact} onChange={(event) => setDraft({ ...draft, contact: event.target.value })} /></label>
             <label>Job title<input value={draft.role} onChange={(event) => setDraft({ ...draft, role: event.target.value })} /></label>
-            <label>Phone<input type="tel" value={draft.phone} onChange={(event) => setDraft({ ...draft, phone: event.target.value })} /></label>
-            <label>Email<input type="email" value={draft.email} onChange={(event) => setDraft({ ...draft, email: event.target.value })} /></label>
+            <label>Department<input value={draft.department ?? ""} onChange={(event) => setDraft({ ...draft, department: event.target.value })} /></label>
+            <label>Contact phone numbers<textarea value={detailDraft.contactPhones} onChange={setDetail("contactPhones")} placeholder="One per line" /></label>
+            <label>Contact email addresses<textarea value={detailDraft.contactEmails} onChange={setDetail("contactEmails")} placeholder="One per line" /></label>
             <label>Website<input value={draft.site} onChange={(event) => setDraft({ ...draft, site: event.target.value })} /></label>
+            <label className="record-edit-wide">Social media & handles<textarea value={detailDraft.socialMedia} onChange={setDetail("socialMedia")} placeholder="One per line" /></label>
             <label className="record-edit-wide">Location<input value={draft.location} onChange={(event) => setDraft({ ...draft, location: event.target.value })} /></label>
+            <label className="record-edit-wide">Other extracted details<textarea value={detailDraft.otherInformation} onChange={setDetail("otherInformation")} placeholder="Label: value, one per line" /></label>
             <div className="record-edit-actions">
-              <button className="secondary" type="button" disabled={saving} onClick={() => { setDraft(company); setEditing(false); setError(""); }}>Cancel</button>
+              <button className="secondary" type="button" disabled={saving} onClick={() => { setDraft(company); setDetailDraft(editableDetailValues(company)); setEditing(false); setError(""); }}>Cancel</button>
               <button className="primary" type="submit" disabled={saving}>{saving ? <><span className="spinner" /> Saving…</> : "Save changes"}</button>
             </div>
           </form>
@@ -611,14 +648,15 @@ function RecordModal({ company, workspaceSlug, close, onUpdate, onDelete, onView
             <section>
               <h3>Primary contact</h3>
               <div className="person-card"><span className={`avatar ${company.accent}`}>{company.contact.split(" ").map((part) => part[0]).join("")}</span><div><strong>{company.contact || "No contact listed"}</strong><p>{company.role}</p></div></div>
-              <dl><dt>Phone</dt><dd>{company.phone || "—"}</dd><dt>Email</dt><dd>{company.email || "—"}</dd><dt>Website</dt><dd>{company.site || "—"}</dd><dt>Location</dt><dd>{company.location || "—"}</dd></dl>
+              <dl><dt>Phones</dt><dd className="record-value-list">{allPhones.length ? allPhones.map((value) => <span key={value}>{value}</span>) : "—"}</dd><dt>Emails</dt><dd className="record-value-list">{allEmails.length ? allEmails.map((value) => <span key={value}>{value}</span>) : "—"}</dd><dt>Website</dt><dd>{company.site || "—"}</dd><dt>Location</dt><dd>{company.location || "—"}</dd></dl>
             </section>
             <section><h3>Original business card</h3><CardArtwork company={company} /><button className="secondary full" onClick={onViewCard}>View original images</button></section>
+            {hasAdditionalDetails && <section className="record-extra-details"><h3>All extracted details</h3><dl>{company.industry && <><dt>Industry</dt><dd>{company.industry}</dd></>}{company.department && <><dt>Department</dt><dd>{company.department}</dd></>}{company.tagline && <><dt>Tagline</dt><dd>{company.tagline}</dd></>}{company.description && <><dt>Description</dt><dd>{company.description}</dd></>}{company.socialMedia?.length ? <><dt>Social</dt><dd className="record-value-list">{company.socialMedia.map((value) => <span key={value}>{value}</span>)}</dd></> : null}{company.otherInformation?.map((item, index) => <Fragment key={`${item.label}:${item.value}:${index}`}><dt>{item.label}</dt><dd>{item.value}</dd></Fragment>)}</dl></section>}
           </div>
         )}
         <div className="record-footer">
           <small>Verified record · Added {company.added}</small>
-          {!editing && <div className="record-footer-actions">{workspaceSlug && <button className="danger-button" onClick={() => { setError(""); setConfirmingDelete(true); }}>Delete card</button>}<button className="primary" onClick={() => { setDraft(company); setError(""); setEditing(true); }}>Edit record</button></div>}
+          {!editing && <div className="record-footer-actions">{workspaceSlug && <button className="danger-button" onClick={() => { setError(""); setConfirmingDelete(true); }}>Delete card</button>}<button className="primary" onClick={() => { setDraft(company); setDetailDraft(editableDetailValues(company)); setError(""); setEditing(true); }}>Edit record</button></div>}
         </div>
         {confirmingDelete && (
           <div className="delete-confirmation-backdrop" onMouseDown={() => !deleting && setConfirmingDelete(false)}>
